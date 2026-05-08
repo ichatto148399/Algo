@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Change Requests – UMSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <main class="page-content">
+
+      <div class="page-header">
+        <div><h2>Schedule Change Requests</h2><p>Submit and track your schedule change requests</p></div>
+        <button class="btn btn-primary" onclick="UI.openModal('request-modal')">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Request
+        </button>
+      </div>
+
+      <div class="stat-grid" style="margin-bottom:20px">
+        <div class="stat-card orange">
+          <div class="stat-icon orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+          <div class="stat-info"><div class="stat-value" id="cnt-pending">0</div><div class="stat-label">Pending</div></div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+          <div class="stat-info"><div class="stat-value" id="cnt-approved">0</div><div class="stat-label">Approved</div></div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></div>
+          <div class="stat-info"><div class="stat-value" id="cnt-rejected">0</div><div class="stat-label">Rejected</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <div id="requests-list"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Request Modal -->
+<div class="modal-overlay" id="request-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>New Schedule Change Request</h3>
+      <button class="modal-close" onclick="UI.closeModal('request-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Select Schedule *</label>
+        <select id="req-schedule" class="form-control">
+          <option value="">-- Select your schedule --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Request Type *</label>
+        <select id="req-type" class="form-control">
+          <option>Reschedule</option>
+          <option>Room Change</option>
+          <option>Faculty Substitute</option>
+          <option>Cancel Class</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Reason *</label>
+        <textarea id="req-reason" class="form-control" rows="3" placeholder="Explain why you need this change..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Requested Change Details</label>
+        <input type="text" id="req-details" class="form-control" placeholder="e.g. Move to Thursday 10:30–12:00, Room 102">
+        <div class="form-hint">Provide specific details about what you're requesting</div>
+      </div>
+      <div id="req-error" class="alert alert-danger" style="display:none">Please fill in all required fields.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="UI.closeModal('request-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRequest()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  Auth.requireAuth(['faculty']);
+  UI.renderSidebar('change-requests');
+  UI.renderTopbar('Change Requests', 'Schedule change request management');
+
+  const user = Auth.currentUser;
+
+  // Populate schedule dropdown with faculty's own schedules
+  const myScheds = DB.schedules.filter(s => s.facultyId === user.id);
+  const sel = document.getElementById('req-schedule');
+  myScheds.forEach(s => sel.add(new Option(`${s.subjectCode} – ${s.section} (${s.day} ${s.startTime}–${s.endTime})`, s.id)));
+
+  function updateCounts() {
+    const mine = DB.changeRequests.filter(r => r.facultyId === user.id);
+    document.getElementById('cnt-pending').textContent = mine.filter(r=>r.status==='pending').length;
+    document.getElementById('cnt-approved').textContent = mine.filter(r=>r.status==='approved').length;
+    document.getElementById('cnt-rejected').textContent = mine.filter(r=>r.status==='rejected').length;
+  }
+
+  function renderRequests() {
+    const mine = DB.changeRequests.filter(r => r.facultyId === user.id);
+    document.getElementById('requests-list').innerHTML = mine.length ? `
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Type</th><th>Schedule</th><th>Reason</th><th>Requested Change</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            ${mine.map(r => {
+              const sched = DB.schedules.find(s => s.id === r.scheduleId);
+              return `<tr>
+                <td><span class="badge badge-primary">${r.type}</span></td>
+                <td style="font-size:12px">${sched ? `${sched.subjectCode} – ${sched.section}` : '–'}</td>
+                <td style="font-size:12px">${r.reason}</td>
+                <td style="font-size:12px">${r.requestedDay ? `${r.requestedDay} ${r.requestedTime}` : r.requestedRoom || r.requestedDetails || '–'}</td>
+                <td style="font-size:12px">${r.date}</td>
+                <td><span class="badge badge-${r.status==='pending'?'warning':r.status==='approved'?'success':'danger'}">${r.status}</span></td>
+                <td>${r.status === 'pending' ? `<button class="btn btn-sm btn-danger" onclick="cancelRequest(${r.id})">Cancel</button>` : '–'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>` :
+      `<div class="empty-state">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <p>No change requests submitted yet.</p>
+      </div>`;
+    updateCounts();
+  }
+
+  function submitRequest() {
+    const schedId = document.getElementById('req-schedule').value;
+    const reason = document.getElementById('req-reason').value.trim();
+    document.getElementById('req-error').style.display = 'none';
+    if (!schedId || !reason) { document.getElementById('req-error').style.display = 'flex'; return; }
+
+    DB.changeRequests.push({
+      id: DB.nextId('changeRequests'),
+      facultyId: user.id,
+      facultyName: user.name,
+      scheduleId: parseInt(schedId),
+      type: document.getElementById('req-type').value,
+      reason,
+      requestedDetails: document.getElementById('req-details').value.trim(),
+      status: 'pending',
+      date: new Date().toISOString().split('T')[0]
+    });
+
+    DB.notifications.unshift({
+      id: DB.nextId('notifications'),
+      message: `New schedule change request from ${user.name}`,
+      type: 'info',
+      time: 'Just now',
+      read: false
+    });
+
+    UI.closeModal('request-modal');
+    UI.showToast('Request submitted successfully.');
+    document.getElementById('req-reason').value = '';
+    document.getElementById('req-details').value = '';
+    renderRequests();
+  }
+
+  function cancelRequest(id) {
+    UI.confirm('Cancel this request?', () => {
+      DB.changeRequests = DB.changeRequests.filter(r => r.id !== id);
+      UI.showToast('Request cancelled.', 'warning');
+      renderRequests();
+    });
+  }
+
+  renderRequests();
+</script>
+</body>
+</html>

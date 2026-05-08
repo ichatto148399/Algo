@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Subjects – UMSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <main class="page-content">
+
+      <div class="page-header">
+        <div><h2>Subject Management</h2><p>Manage subject offerings per semester</p></div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline" onclick="openDeptModal()">Manage Departments &amp; Programs</button>
+          <button class="btn btn-primary" onclick="openAddSubject()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Subject
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-body">
+          <div class="toolbar">
+            <div class="search-box">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="search-input" placeholder="Search by code, title..." oninput="renderTable()">
+            </div>
+            <select class="filter-select" id="filter-dept" onchange="renderTable()">
+              <option value="">All Departments</option>
+            </select>
+            <select class="filter-select" id="filter-sem" onchange="renderTable()">
+              <option value="">All Semesters</option>
+              <option>1st</option><option>2nd</option><option>Summer</option>
+            </select>
+            <select class="filter-select" id="filter-type" onchange="renderTable()">
+              <option value="">All Types</option>
+              <option>Major</option><option>GE</option><option>Elective</option><option>Professional</option>
+            </select>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Code</th><th>Title</th><th>Units</th><th>Lec/Lab</th><th>Department</th><th>Program</th><th>Year</th><th>Semester</th><th>Type</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="subjects-tbody"></tbody>
+            </table>
+          </div>
+          <div id="empty-state" class="empty-state" style="display:none">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            <p>No subjects found.</p>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add/Edit Subject Modal -->
+<div class="modal-overlay" id="subject-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-title">Add Subject</h3>
+      <button class="modal-close" onclick="UI.closeModal('subject-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Subject Code *</label>
+          <input type="text" id="f-code" class="form-control" placeholder="e.g. IT101">
+        </div>
+        <div class="form-group">
+          <label>Units *</label>
+          <input type="number" id="f-units" class="form-control" min="1" max="6" value="3">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Subject Title *</label>
+        <input type="text" id="f-title" class="form-control" placeholder="Full subject title">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Lecture Hours</label>
+          <input type="number" id="f-lec" class="form-control" min="0" max="6" value="3">
+        </div>
+        <div class="form-group">
+          <label>Lab Hours</label>
+          <input type="number" id="f-lab" class="form-control" min="0" max="6" value="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Department *</label>
+          <select id="f-dept" class="form-control" onchange="populateProgramSelect('f-program','f-dept')">
+            <option value="">-- Select Department --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Program *</label>
+          <select id="f-program" class="form-control">
+            <option value="">-- Select Program --</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Year Level</label>
+          <select id="f-year" class="form-control">
+            <option value="1">1st Year</option><option value="2">2nd Year</option>
+            <option value="3">3rd Year</option><option value="4">4th Year</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Semester</label>
+          <select id="f-sem" class="form-control">
+            <option>1st</option><option>2nd</option><option>Summer</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Subject Type</label>
+        <select id="f-type" class="form-control">
+          <option>Major</option><option>GE</option><option>Elective</option><option>Professional</option>
+        </select>
+      </div>
+      <div id="form-error" class="alert alert-danger" style="display:none">Please fill in all required fields.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="UI.closeModal('subject-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSubject()">Save Subject</button>
+    </div>
+  </div>
+</div>
+
+<!-- Departments & Programs Modal -->
+<div class="modal-overlay" id="dept-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3>Departments &amp; Programs</h3>
+      <button class="modal-close" onclick="UI.closeModal('dept-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="tabs" style="margin-bottom:16px">
+        <button class="tab-btn active" onclick="switchDeptTab('departments')">Departments</button>
+        <button class="tab-btn" onclick="switchDeptTab('programs')">Programs</button>
+      </div>
+
+      <!-- Departments sub-tab -->
+      <div id="dtab-departments">
+        <div class="d-flex gap-2 mb-2" style="margin-bottom:12px">
+          <input type="text" id="new-dept-code" class="form-control" placeholder="Code (e.g. BSIT)" style="max-width:140px">
+          <input type="text" id="new-dept-name" class="form-control" placeholder="Department name">
+          <button class="btn btn-primary btn-sm" onclick="addDepartment()" style="white-space:nowrap">Add</button>
+        </div>
+        <div id="dept-error" class="alert alert-danger" style="display:none;margin-bottom:8px">Please fill in both fields.</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Programs</th><th></th></tr></thead>
+            <tbody id="dept-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Programs sub-tab -->
+      <div id="dtab-programs" style="display:none">
+        <div class="d-flex gap-2 mb-2" style="margin-bottom:12px">
+          <input type="text" id="new-prog-code" class="form-control" placeholder="Code (e.g. BSIT)" style="max-width:140px">
+          <input type="text" id="new-prog-name" class="form-control" placeholder="Program name">
+          <select id="new-prog-dept" class="filter-select" style="min-width:160px">
+            <option value="">-- Department --</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="addProgram()" style="white-space:nowrap">Add</button>
+        </div>
+        <div id="prog-error" class="alert alert-danger" style="display:none;margin-bottom:8px">Please fill in all fields.</div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Code</th><th>Name</th><th>Department</th><th></th></tr></thead>
+            <tbody id="prog-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="UI.closeModal('dept-modal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  Auth.requireAuth(['admin','registrar']);
+  UI.renderSidebar('subjects');
+  UI.renderTopbar('Subject Management', 'Manage academic subjects');
+
+  let editingId = null;
+
+  // ---- Dept filter dropdown ----
+  function refreshDeptFilter() {
+    const sel = document.getElementById('filter-dept');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">All Departments</option>' +
+      DB.departments.map(d => `<option value="${d.code}" ${d.code===cur?'selected':''}>${d.code} – ${d.name}</option>`).join('');
+  }
+
+  // ---- Populate dept select in subject modal ----
+  function populateDeptSelect(selId, currentVal = '') {
+    const sel = document.getElementById(selId);
+    sel.innerHTML = '<option value="">-- Select Department --</option>' +
+      DB.departments.map(d => `<option value="${d.code}" ${d.code===currentVal?'selected':''}>${d.code} – ${d.name}</option>`).join('');
+  }
+
+  // ---- Populate program select filtered by dept ----
+  function populateProgramSelect(progSelId, deptSelId, currentVal = '') {
+    const deptCode = document.getElementById(deptSelId).value;
+    const dept = DB.departments.find(d => d.code === deptCode);
+    const programs = dept ? DB.programs.filter(p => p.departmentId === dept.id) : [];
+    const sel = document.getElementById(progSelId);
+    sel.innerHTML = '<option value="">-- Select Program --</option>' +
+      programs.map(p => `<option value="${p.code}" ${p.code===currentVal?'selected':''}>${p.code} – ${p.name}</option>`).join('');
+    if (!programs.length && deptCode) {
+      sel.innerHTML += '<option disabled>No programs for this department</option>';
+    }
+  }
+
+  // ---- Subject table ----
+  function renderTable() {
+    const search = document.getElementById('search-input').value.toLowerCase();
+    const dept   = document.getElementById('filter-dept').value;
+    const sem    = document.getElementById('filter-sem').value;
+    const type   = document.getElementById('filter-type').value;
+    const data   = DB.subjects.filter(s =>
+      (!search || s.code.toLowerCase().includes(search) || s.title.toLowerCase().includes(search)) &&
+      (!dept || s.department === dept) &&
+      (!sem  || s.semester === sem) &&
+      (!type || s.type === type)
+    );
+    document.getElementById('empty-state').style.display = data.length ? 'none' : 'block';
+    document.getElementById('subjects-tbody').innerHTML = data.map(s => `
+      <tr>
+        <td><span class="badge badge-primary">${s.code}</span></td>
+        <td><div class="fw-bold">${s.title}</div></td>
+        <td style="text-align:center">${s.units}</td>
+        <td style="text-align:center;font-size:12px">${s.lec}/${s.lab}</td>
+        <td>${s.department}</td>
+        <td>${s.program}</td>
+        <td style="text-align:center">${s.yearLevel}</td>
+        <td><span class="badge badge-info">${s.semester}</span></td>
+        <td><span class="badge badge-${s.type==='GE'?'success':s.type==='Elective'?'warning':'secondary'}">${s.type}</span></td>
+        <td>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline" onclick="editSubject(${s.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSubject(${s.id})">Delete</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function openAddSubject() {
+    if (!DB.departments.length) {
+      UI.showToast('Add at least one department first.', 'warning');
+      openDeptModal(); return;
+    }
+    editingId = null;
+    document.getElementById('modal-title').textContent = 'Add Subject';
+    document.getElementById('f-code').value = '';
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-units').value = 3;
+    document.getElementById('f-lec').value = 3;
+    document.getElementById('f-lab').value = 0;
+    populateDeptSelect('f-dept');
+    document.getElementById('f-program').innerHTML = '<option value="">-- Select Program --</option>';
+    document.getElementById('form-error').style.display = 'none';
+    UI.openModal('subject-modal');
+  }
+
+  function editSubject(id) {
+    editingId = id;
+    const s = DB.subjects.find(x => x.id === id);
+    document.getElementById('modal-title').textContent = 'Edit Subject';
+    document.getElementById('f-code').value = s.code;
+    document.getElementById('f-title').value = s.title;
+    document.getElementById('f-units').value = s.units;
+    document.getElementById('f-lec').value = s.lec;
+    document.getElementById('f-lab').value = s.lab;
+    document.getElementById('f-year').value = s.yearLevel;
+    document.getElementById('f-sem').value = s.semester;
+    document.getElementById('f-type').value = s.type;
+    populateDeptSelect('f-dept', s.department);
+    populateProgramSelect('f-program', 'f-dept', s.program);
+    document.getElementById('form-error').style.display = 'none';
+    UI.openModal('subject-modal');
+  }
+
+  function saveSubject() {
+    const code  = document.getElementById('f-code').value.trim();
+    const title = document.getElementById('f-title').value.trim();
+    const units = parseInt(document.getElementById('f-units').value);
+    const dept  = document.getElementById('f-dept').value;
+    const prog  = document.getElementById('f-program').value;
+    if (!code || !title || !units || !dept || !prog) {
+      document.getElementById('form-error').style.display = 'flex'; return;
+    }
+    document.getElementById('form-error').style.display = 'none';
+    const data = {
+      code, title, units,
+      lec: parseInt(document.getElementById('f-lec').value) || 0,
+      lab: parseInt(document.getElementById('f-lab').value) || 0,
+      department: dept,
+      program: prog,
+      yearLevel: parseInt(document.getElementById('f-year').value),
+      semester: document.getElementById('f-sem').value,
+      type: document.getElementById('f-type').value,
+    };
+    if (editingId) {
+      const idx = DB.subjects.findIndex(s => s.id === editingId);
+      DB.subjects[idx] = { ...DB.subjects[idx], ...data };
+      UI.showToast('Subject updated.');
+    } else {
+      DB.subjects.push({ id: DB.nextId('subjects'), ...data });
+      UI.showToast('Subject added.');
+    }
+    UI.closeModal('subject-modal');
+    renderTable();
+  }
+
+  function deleteSubject(id) {
+    UI.confirm('Delete this subject?', () => {
+      DB.subjects = DB.subjects.filter(s => s.id !== id);
+      UI.showToast('Subject deleted.', 'warning');
+      renderTable();
+    });
+  }
+
+  // ---- Departments & Programs modal ----
+  function openDeptModal() {
+    renderDeptTable();
+    renderProgTable();
+    refreshNewProgDeptSelect();
+    UI.openModal('dept-modal');
+  }
+
+  function switchDeptTab(tab) {
+    document.querySelectorAll('#dept-modal .tab-btn').forEach((b,i) => b.classList.toggle('active', ['departments','programs'][i] === tab));
+    document.getElementById('dtab-departments').style.display = tab === 'departments' ? 'block' : 'none';
+    document.getElementById('dtab-programs').style.display   = tab === 'programs'    ? 'block' : 'none';
+  }
+
+  function renderDeptTable() {
+    document.getElementById('dept-tbody').innerHTML = DB.departments.length
+      ? DB.departments.map(d => {
+          const progCount = DB.programs.filter(p => p.departmentId === d.id).length;
+          return `<tr>
+            <td><span class="badge badge-primary">${d.code}</span></td>
+            <td class="fw-bold">${d.name}</td>
+            <td style="text-align:center">${progCount}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteDepartment(${d.id})">Delete</button></td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-muted)">No departments added yet.</td></tr>';
+  }
+
+  function renderProgTable() {
+    document.getElementById('prog-tbody').innerHTML = DB.programs.length
+      ? DB.programs.map(p => {
+          const dept = DB.departments.find(d => d.id === p.departmentId);
+          return `<tr>
+            <td><span class="badge badge-info">${p.code}</span></td>
+            <td class="fw-bold">${p.name}</td>
+            <td>${dept ? dept.code : '–'}</td>
+            <td><button class="btn btn-sm btn-danger" onclick="deleteProgram(${p.id})">Delete</button></td>
+          </tr>`;
+        }).join('')
+      : '<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text-muted)">No programs added yet.</td></tr>';
+  }
+
+  function refreshNewProgDeptSelect() {
+    const sel = document.getElementById('new-prog-dept');
+    sel.innerHTML = '<option value="">-- Department --</option>' +
+      DB.departments.map(d => `<option value="${d.id}">${d.code} – ${d.name}</option>`).join('');
+  }
+
+  function addDepartment() {
+    const code = document.getElementById('new-dept-code').value.trim().toUpperCase();
+    const name = document.getElementById('new-dept-name').value.trim();
+    document.getElementById('dept-error').style.display = 'none';
+    if (!code || !name) { document.getElementById('dept-error').style.display = 'flex'; return; }
+    if (DB.departments.find(d => d.code === code)) {
+      document.getElementById('dept-error').textContent = 'Department code already exists.';
+      document.getElementById('dept-error').style.display = 'flex'; return;
+    }
+    DB.departments.push({ id: DB.nextId('departments'), code, name });
+    document.getElementById('new-dept-code').value = '';
+    document.getElementById('new-dept-name').value = '';
+    renderDeptTable();
+    refreshNewProgDeptSelect();
+    refreshDeptFilter();
+    UI.showToast('Department added.');
+  }
+
+  function deleteDepartment(id) {
+    const hasPrograms = DB.programs.some(p => p.departmentId === id);
+    if (hasPrograms) { UI.showToast('Remove all programs under this department first.', 'error'); return; }
+    UI.confirm('Delete this department?', () => {
+      DB.departments = DB.departments.filter(d => d.id !== id);
+      renderDeptTable();
+      refreshNewProgDeptSelect();
+      refreshDeptFilter();
+      UI.showToast('Department deleted.', 'warning');
+    });
+  }
+
+  function addProgram() {
+    const code   = document.getElementById('new-prog-code').value.trim().toUpperCase();
+    const name   = document.getElementById('new-prog-name').value.trim();
+    const deptId = parseInt(document.getElementById('new-prog-dept').value);
+    document.getElementById('prog-error').style.display = 'none';
+    if (!code || !name || !deptId) { document.getElementById('prog-error').style.display = 'flex'; return; }
+    if (DB.programs.find(p => p.code === code)) {
+      document.getElementById('prog-error').textContent = 'Program code already exists.';
+      document.getElementById('prog-error').style.display = 'flex'; return;
+    }
+    DB.programs.push({ id: DB.nextId('programs'), code, name, departmentId: deptId });
+    document.getElementById('new-prog-code').value = '';
+    document.getElementById('new-prog-name').value = '';
+    renderProgTable();
+    UI.showToast('Program added.');
+  }
+
+  function deleteProgram(id) {
+    UI.confirm('Delete this program?', () => {
+      DB.programs = DB.programs.filter(p => p.id !== id);
+      renderProgTable();
+      UI.showToast('Program deleted.', 'warning');
+    });
+  }
+
+  refreshDeptFilter();
+  renderTable();
+</script>
+</body>
+</html>

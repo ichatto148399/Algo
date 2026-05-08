@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Room Management – UMSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <main class="page-content">
+
+      <div class="page-header">
+        <div><h2>Room Management</h2><p>Manage rooms and view availability</p></div>
+        <button class="btn btn-primary" id="add-room-btn" onclick="openAddRoom()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Room
+        </button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('inventory')">Room Inventory</button>
+        <button class="tab-btn" onclick="switchTab('calendar')">Availability Calendar</button>
+        <button class="tab-btn" onclick="switchTab('utilization')">Utilization Report</button>
+      </div>
+
+      <!-- Inventory Tab -->
+      <div class="tab-pane active" id="tab-inventory">
+        <div class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="room-search" placeholder="Search rooms..." oninput="renderRooms()">
+              </div>
+              <select class="filter-select" id="room-type-filter" onchange="renderRooms()">
+                <option value="">All Types</option>
+                <option>Lecture</option><option>Computer Lab</option><option>Auditorium</option>
+              </select>
+              <select class="filter-select" id="room-status-filter" onchange="renderRooms()">
+                <option value="">All Status</option>
+                <option>available</option><option>maintenance</option><option>occupied</option>
+              </select>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Room</th><th>Building</th><th>Type</th><th>Capacity</th><th>Facilities</th><th>Status</th><th>Utilization</th><th>Actions</th></tr></thead>
+                <tbody id="rooms-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calendar Tab -->
+      <div class="tab-pane" id="tab-calendar">
+        <div class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <label style="font-weight:600;font-size:13px">Select Room:</label>
+              <select class="filter-select" id="cal-room-select" onchange="renderCalendar()" style="min-width:200px">
+              </select>
+              <span id="cal-room-info" style="font-size:12px;color:var(--text-muted)"></span>
+            </div>
+            <div class="schedule-grid" id="room-calendar-wrap"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Utilization Tab -->
+      <div class="tab-pane" id="tab-utilization">
+        <div class="card">
+          <div class="card-body" id="util-content"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Room Modal -->
+<div class="modal-overlay" id="room-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="room-modal-title">Add Room</h3>
+      <button class="modal-close" onclick="UI.closeModal('room-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Room Number/Name *</label>
+          <input type="text" id="rf-number" class="form-control" placeholder="e.g. Room 101">
+        </div>
+        <div class="form-group">
+          <label>Building *</label>
+          <input type="text" id="rf-building" class="form-control" placeholder="e.g. Main">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Room Type *</label>
+          <select id="rf-type" class="form-control">
+            <option>Lecture</option><option>Computer Lab</option><option>Science Lab</option><option>Auditorium</option><option>Gymnasium</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Capacity *</label>
+          <input type="number" id="rf-capacity" class="form-control" min="1" value="40">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="rf-status" class="form-control">
+          <option value="available">Available</option>
+          <option value="maintenance">Under Maintenance</option>
+          <option value="occupied">Occupied</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Facilities (comma-separated)</label>
+        <input type="text" id="rf-facilities" class="form-control" placeholder="e.g. Projector, AC, Whiteboard">
+        <div class="form-hint">List available equipment and amenities</div>
+      </div>
+      <div id="room-error" class="alert alert-danger" style="display:none">Please fill in all required fields.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="UI.closeModal('room-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRoom()">Save Room</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  Auth.requireAuth();
+  const isReadOnly = Auth.currentUser.role === 'faculty';
+  UI.renderSidebar('rooms');
+  UI.renderTopbar('Room Management', 'View and manage room assignments');
+  if (isReadOnly) document.getElementById('add-room-btn').style.display = 'none';
+
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const TIMES = ['07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30','18:00'];
+  const COLORS = ['color-1','color-2','color-3','color-4','color-5','color-6'];
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['inventory','calendar','utilization'][i] === tab));
+    document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', ['tab-inventory','tab-calendar','tab-utilization'][i] === `tab-${tab}`));
+    if (tab === 'calendar') {
+      // Refresh room select with current rooms
+      const sel = document.getElementById('cal-room-select');
+      const cur = sel.value;
+      sel.innerHTML = DB.rooms.map(r => `<option value="${r.id}" ${r.id==cur?'selected':''}>${r.number}</option>`).join('');
+      renderCalendar();
+    }
+    if (tab === 'utilization') renderUtilization();
+  }
+
+  function renderRooms() {
+    const search = document.getElementById('room-search').value.toLowerCase();
+    const type = document.getElementById('room-type-filter').value;
+    const status = document.getElementById('room-status-filter').value;
+    const data = DB.rooms.filter(r =>
+      (!search || r.number.toLowerCase().includes(search) || r.building.toLowerCase().includes(search)) &&
+      (!type || r.type === type) &&
+      (!status || r.status === status)
+    );
+    document.getElementById('rooms-tbody').innerHTML = data.map(r => {
+      const used = DB.schedules.filter(s => s.roomId === r.id).length;
+      const pct = Math.min(Math.round((used / 10) * 100), 100);
+      const color = pct > 80 ? 'red' : pct > 50 ? 'orange' : 'green';
+      return `<tr>
+        <td><div class="fw-bold">${r.number}</div></td>
+        <td>${r.building}</td>
+        <td><span class="badge badge-primary">${r.type}</span></td>
+        <td style="text-align:center">${r.capacity}</td>
+        <td style="font-size:11px">${(r.facilities||[]).join(', ')}</td>
+        <td><span class="badge badge-${r.status==='available'?'success':r.status==='maintenance'?'danger':'warning'}">${r.status}</span></td>
+        <td style="min-width:120px">
+          <div class="progress-bar-wrap"><div class="progress-bar ${color}" style="width:${pct}%"></div></div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${used} classes scheduled</div>
+        </td>
+        <td>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline" onclick="viewRoomSchedule(${r.id})">View</button>
+            ${!isReadOnly ? `<button class="btn btn-sm btn-outline" onclick="editRoom(${r.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteRoom(${r.id})">Delete</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:20px">No rooms found.</td></tr>';
+  }
+
+  function renderCalendar() {
+    if (!DB.rooms.length) {
+      document.getElementById('room-calendar-wrap').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No rooms added yet.</div>';
+      return;
+    }
+    const rid = parseInt(document.getElementById('cal-room-select').value);
+    const room = DB.rooms.find(r => r.id === rid);
+    const schedules = DB.schedules.filter(s => s.roomId === rid);
+    document.getElementById('cal-room-info').textContent = room ? `${room.type} · Capacity: ${room.capacity} · ${room.status}` : '';
+
+    let html = `<div class="sched-table" style="display:grid;grid-template-columns:80px repeat(6,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden">`;
+    html += `<div style="background:var(--primary);color:white;padding:10px;text-align:center;font-size:12px;font-weight:700">Time</div>`;
+    DAYS.forEach(d => html += `<div style="background:var(--primary);color:white;padding:10px;text-align:center;font-size:12px;font-weight:700">${d}</div>`);
+
+    TIMES.forEach((time, ti) => {
+      if (ti === TIMES.length - 1) return;
+      const nextTime = TIMES[ti + 1];
+      html += `<div style="background:#f7f9fc;padding:8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600">${time}</div>`;
+      DAYS.forEach(day => {
+        const sched = schedules.find(s => s.day === day && s.startTime <= time && s.endTime > time);
+        if (sched) {
+          const isStart = sched.startTime === time;
+          html += `<div style="background:rgba(42,82,152,0.08);padding:3px;min-height:40px">`;
+          if (isStart) html += `<div class="sched-block color-1" title="${sched.subjectTitle}">${sched.subjectCode}<br><span style="font-weight:400">${sched.section}</span></div>`;
+          html += `</div>`;
+        } else {
+          html += `<div style="background:white;padding:3px;min-height:40px"></div>`;
+        }
+      });
+    });
+    html += `</div>`;
+    document.getElementById('room-calendar-wrap').innerHTML = html;
+  }
+
+  function renderUtilization() {
+    document.getElementById('util-content').innerHTML = `
+      <h3 style="margin-bottom:16px;font-size:15px;font-weight:700">Room Utilization Report</h3>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Room</th><th>Type</th><th>Capacity</th><th>Classes/Week</th><th>Utilization</th><th>Status</th></tr></thead>
+          <tbody>
+            ${DB.rooms.map(r => {
+              const used = DB.schedules.filter(s => s.roomId === r.id).length;
+              const pct = Math.min(Math.round((used / 10) * 100), 100);
+              const color = pct > 80 ? 'red' : pct > 50 ? 'orange' : 'green';
+              return `<tr>
+                <td class="fw-bold">${r.number}</td>
+                <td>${r.type}</td>
+                <td style="text-align:center">${r.capacity}</td>
+                <td style="text-align:center">${used}</td>
+                <td style="min-width:150px">
+                  <div class="d-flex align-center gap-2">
+                    <div class="progress-bar-wrap" style="flex:1"><div class="progress-bar ${color}" style="width:${pct}%"></div></div>
+                    <span style="font-size:12px;font-weight:600;min-width:35px">${pct}%</span>
+                  </div>
+                </td>
+                <td><span class="badge badge-${r.status==='available'?'success':r.status==='maintenance'?'danger':'warning'}">${r.status}</span></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>`;
+  }
+
+  function viewRoomSchedule(id) {
+    const sel = document.getElementById('cal-room-select');
+    sel.innerHTML = DB.rooms.map(r => `<option value="${r.id}">${r.number}</option>`).join('');
+    sel.value = id;
+    switchTab('calendar');
+  }
+
+  let editingRoomId = null;
+  function openAddRoom() {
+    editingRoomId = null;
+    document.getElementById('room-modal-title').textContent = 'Add Room';
+    ['rf-number','rf-building','rf-facilities'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('rf-capacity').value = 40;
+    document.getElementById('room-error').style.display = 'none';
+    UI.openModal('room-modal');
+  }
+
+  function editRoom(id) {
+    editingRoomId = id;
+    const r = DB.rooms.find(x => x.id === id);
+    document.getElementById('room-modal-title').textContent = 'Edit Room';
+    document.getElementById('rf-number').value = r.number;
+    document.getElementById('rf-building').value = r.building;
+    document.getElementById('rf-type').value = r.type;
+    document.getElementById('rf-capacity').value = r.capacity;
+    document.getElementById('rf-status').value = r.status;
+    document.getElementById('rf-facilities').value = (r.facilities||[]).join(', ');
+    document.getElementById('room-error').style.display = 'none';
+    UI.openModal('room-modal');
+  }
+
+  function saveRoom() {
+    const number = document.getElementById('rf-number').value.trim();
+    const building = document.getElementById('rf-building').value.trim();
+    const capacity = parseInt(document.getElementById('rf-capacity').value);
+    if (!number || !building || !capacity) { document.getElementById('room-error').style.display = 'flex'; return; }
+    const data = {
+      number, building, capacity,
+      type: document.getElementById('rf-type').value,
+      status: document.getElementById('rf-status').value,
+      facilities: document.getElementById('rf-facilities').value.split(',').map(f=>f.trim()).filter(Boolean)
+    };
+    if (editingRoomId) {
+      const idx = DB.rooms.findIndex(r => r.id === editingRoomId);
+      DB.rooms[idx] = { ...DB.rooms[idx], ...data };
+      UI.showToast('Room updated.');
+    } else {
+      DB.rooms.push({ id: DB.nextId('rooms'), ...data });
+      UI.showToast('Room added.');
+    }
+    UI.closeModal('room-modal');
+    renderRooms();
+  }
+
+  function deleteRoom(id) {
+    UI.confirm('Delete this room?', () => {
+      DB.rooms = DB.rooms.filter(r => r.id !== id);
+      UI.showToast('Room deleted.', 'warning');
+      renderRooms();
+    });
+  }
+
+  renderRooms();
+</script>
+</body>
+</html>

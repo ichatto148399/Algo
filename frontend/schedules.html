@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Schedules – UMSync</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .live-badge { 
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      background:rgba(40,167,69,0.12);
+      color:var(--success);
+      padding:4px 12px;
+      border-radius:20px;
+      font-size:12px;
+      font-weight:700; 
+    }
+    .live-dot { 
+      width:8px;
+      height:8px;
+      border-radius:50%;
+      background:var(--success);
+      animation:pulse 1.5s infinite; 
+    }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} 
+  }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <main class="page-content">
+
+      <div class="page-header">
+        <div>
+          <h2>Schedule Management</h2>
+          <p>View and manage class schedules with conflict detection</p>
+        </div>
+        <div class="d-flex gap-2 align-center">
+          <span class="live-badge"><span class="live-dot"></span>Live View</span>
+          <button class="btn btn-primary" id="add-sched-btn" onclick="openAddSchedule()">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add Schedule
+          </button>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('visual')">Visual Schedule</button>
+        <button class="tab-btn" onclick="switchTab('list')">Schedule List</button>
+        <button class="tab-btn" onclick="switchTab('conflicts')">Conflict Check</button>
+        <button class="tab-btn" onclick="switchTab('requests')">Change Requests</button>
+      </div>
+
+      <!-- Visual Schedule -->
+      <div class="tab-pane active" id="tab-visual">
+        <div class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <select class="filter-select" id="vis-filter" onchange="renderVisual()" style="min-width:180px">
+                <option value="all">All Schedules</option>
+                <option value="faculty">By Faculty</option>
+                <option value="room">By Room</option>
+                <option value="section">By Section</option>
+              </select>
+              <select class="filter-select" id="vis-value" onchange="renderVisual()" style="min-width:200px"></select>
+            </div>
+            <div class="schedule-grid" id="visual-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- List Tab -->
+      <div class="tab-pane" id="tab-list">
+        <div class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="sched-search" placeholder="Search schedules..." oninput="renderList()">
+              </div>
+              <select class="filter-select" id="sched-day-filter" onchange="renderList()">
+                <option value="">All Days</option>
+                <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+                <option>Thursday</option><option>Friday</option><option>Saturday</option>
+              </select>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Subject</th><th>Faculty</th><th>Section</th><th>Room</th><th>Day</th><th>Time</th><th>Type</th><th>Students</th><th>Actions</th></tr></thead>
+                <tbody id="sched-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conflicts Tab -->
+      <div class="tab-pane" id="tab-conflicts">
+        <div class="card">
+          <div class="card-body" id="conflicts-content"></div>
+        </div>
+      </div>
+
+      <!-- Change Requests Tab -->
+      <div class="tab-pane" id="tab-requests">
+        <div class="card">
+          <div class="card-body">
+            <div class="d-flex justify-between align-center mb-2">
+              <h3 style="font-size:15px;font-weight:700">Schedule Change Requests</h3>
+              <button class="btn btn-primary btn-sm" id="new-request-btn" onclick="openRequestModal()">New Request</button>
+            </div>
+            <div id="requests-list"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Add Schedule Modal -->
+<div class="modal-overlay" id="sched-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="sched-modal-title">Add Schedule</h3>
+      <button class="modal-close" onclick="UI.closeModal('sched-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Subject Code *</label>
+          <select id="sf-subject" class="form-control">
+            <option value="">-- Select Subject --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Subject Title</label>
+          <input type="text" id="sf-subject-title" class="form-control" placeholder="Auto-filled" readonly style="background:#f7f9fc">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Faculty *</label>
+          <select id="sf-faculty" class="form-control">
+            <option value="">-- Select Faculty --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Section *</label>
+          <input type="text" id="sf-section" class="form-control" placeholder="e.g. BSIT-1A">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Room *</label>
+          <select id="sf-room" class="form-control">
+            <option value="">-- Select Room --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Day *</label>
+          <select id="sf-day" class="form-control">
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Start Time *</label>
+          <input type="time" id="sf-start" class="form-control" value="07:30">
+        </div>
+        <div class="form-group">
+          <label>End Time *</label>
+          <input type="time" id="sf-end" class="form-control" value="09:00">
+        </div>
+        <div class="form-group">
+          <label>Students</label>
+          <input type="number" id="sf-students" class="form-control" value="30" min="1">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Type</label>
+        <select id="sf-type" class="form-control"><option>Lecture</option><option>Lab</option></select>
+      </div>
+      <div id="sched-conflict-alert" class="alert alert-danger" style="display:none"></div>
+      <div id="sched-error" class="alert alert-danger" style="display:none">Please fill in all required fields.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="UI.closeModal('sched-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveSchedule()">Save Schedule</button>
+    </div>
+  </div>
+</div>
+<!-- Change Request Modal -->
+<div class="modal-overlay" id="request-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Request Schedule Change</h3>
+      <button class="modal-close" onclick="UI.closeModal('request-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Schedule *</label>
+        <select id="req-schedule" class="form-control">
+          <option value="">-- Select Schedule --</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Request Type</label>
+        <select id="req-type" class="form-control">
+          <option>Reschedule</option><option>Room Change</option><option>Faculty Change</option><option>Cancel Class</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Reason *</label>
+        <textarea id="req-reason" class="form-control" placeholder="Explain the reason for this request..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Requested Change Details</label>
+        <input type="text" id="req-details" class="form-control" placeholder="e.g. Move to Thursday 10:30-12:00">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="UI.closeModal('request-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitRequest()">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  Auth.requireAuth();
+  const role = Auth.currentUser.role;
+  UI.renderSidebar('schedules');
+  UI.renderTopbar('Schedule Management', 'Class schedules and conflict detection');
+  if (role === 'faculty') {
+    document.getElementById('add-sched-btn').style.display = 'none';
+    document.getElementById('new-request-btn').textContent = 'New Request';
+  }
+
+  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const TIMES = ['07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
+  const COLORS = ['color-1','color-2','color-3','color-4','color-5','color-6'];
+
+  function switchTab(tab) {
+    const tabs = ['visual','list','conflicts','requests'];
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', tabs[i] === tab));
+    document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', `tab-${tabs[i]}` === `tab-${tab}`));
+    if (tab === 'list') renderList();
+    if (tab === 'conflicts') renderConflicts();
+    if (tab === 'requests') renderRequests();
+  }
+
+  function updateVisFilter() {
+    const type = document.getElementById('vis-filter').value;
+    const sel = document.getElementById('vis-value');
+    sel.innerHTML = '';
+    if (type === 'all') { sel.style.display = 'none'; renderVisual(); return; }
+    sel.style.display = '';
+    if (type === 'faculty') DB.users.filter(u=>u.role==='faculty').forEach(f => sel.add(new Option(f.name, f.id)));
+    if (type === 'room') DB.rooms.forEach(r => sel.add(new Option(r.number, r.id)));
+    if (type === 'section') [...new Set(DB.schedules.map(s=>s.section))].forEach(sec => sel.add(new Option(sec, sec)));
+    renderVisual();
+  }
+
+  function renderVisual() {
+    const type = document.getElementById('vis-filter').value;
+    const val = document.getElementById('vis-value').value;
+    let schedules = DB.schedules;
+    if (type === 'faculty' && val) schedules = schedules.filter(s => s.facultyId == val);
+    if (type === 'room' && val) schedules = schedules.filter(s => s.roomId == val);
+    if (type === 'section' && val) schedules = schedules.filter(s => s.section === val);
+    if (role === 'faculty') schedules = schedules.filter(s => s.facultyId === Auth.currentUser.id);
+
+    const colorMap = {};
+    let colorIdx = 0;
+    schedules.forEach(s => { if (!colorMap[s.subjectCode]) colorMap[s.subjectCode] = COLORS[colorIdx++ % COLORS.length]; });
+
+    let html = `<div style="display:grid;grid-template-columns:80px repeat(6,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;min-width:700px">`;
+    html += `<div style="background:var(--primary);color:white;padding:10px;text-align:center;font-size:12px;font-weight:700">Time</div>`;
+    DAYS.forEach(d => html += `<div style="background:var(--primary);color:white;padding:10px;text-align:center;font-size:12px;font-weight:700">${d}</div>`);
+
+    TIMES.forEach((time, ti) => {
+      if (ti === TIMES.length - 1) return;
+      html += `<div style="background:#f7f9fc;padding:8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">${time}</div>`;
+      DAYS.forEach(day => {
+        const dayScheds = schedules.filter(s => s.day === day && s.startTime <= time && s.endTime > time);
+        html += `<div style="background:white;padding:2px;min-height:44px">`;
+        dayScheds.forEach(s => {
+          if (s.startTime === time) {
+            html += `<div class="sched-block ${colorMap[s.subjectCode]}" title="${s.subjectTitle}\n${s.facultyName}\n${s.room}" onclick="showSchedDetail(${s.id})">
+              <div>${s.subjectCode}</div>
+              <div style="font-weight:400;font-size:10px">${s.section}</div>
+              <div style="font-weight:400;font-size:10px">${s.room}</div>
+            </div>`;
+          }
+        });
+        html += `</div>`;
+      });
+    });
+    html += `</div>`;
+    document.getElementById('visual-grid').innerHTML = `<div style="overflow-x:auto">${html}</div>`;
+  }
+
+  function showSchedDetail(id) {
+    const s = DB.schedules.find(x => x.id === id);
+    if (!s) return;
+    alert(`Subject: ${s.subjectCode} – ${s.subjectTitle}\nFaculty: ${s.facultyName}\nSection: ${s.section}\nRoom: ${s.room}\nDay: ${s.day} ${s.startTime}–${s.endTime}\nType: ${s.type}\nStudents: ${s.students}`);
+  }
+
+  function renderList() {
+    const search = document.getElementById('sched-search').value.toLowerCase();
+    const day = document.getElementById('sched-day-filter').value;
+    let data = DB.schedules.filter(s =>
+      (!search || s.subjectCode.toLowerCase().includes(search) || s.facultyName.toLowerCase().includes(search) || s.section.toLowerCase().includes(search)) &&
+      (!day || s.day === day)
+    );
+    if (role === 'faculty') data = data.filter(s => s.facultyId === Auth.currentUser.id);
+    document.getElementById('sched-tbody').innerHTML = data.map(s => `
+      <tr>
+        <td><div class="fw-bold">${s.subjectCode}</div><div class="text-muted" style="font-size:11px">${s.subjectTitle}</div></td>
+        <td style="font-size:12px">${s.facultyName}</td>
+        <td>${s.section}</td>
+        <td><span class="badge badge-info">${s.room}</span></td>
+        <td>${s.day}</td>
+        <td style="font-size:12px">${s.startTime} – ${s.endTime}</td>
+        <td><span class="badge badge-${s.type==='Lab'?'warning':'primary'}">${s.type}</span></td>
+        <td style="text-align:center">${s.students}</td>
+        <td>
+          ${role !== 'faculty' ? `<div class="d-flex gap-2">
+            <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id})">Delete</button>
+          </div>` : '–'}
+        </td>
+      </tr>`).join('') || '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:20px">No schedules found.</td></tr>';
+  }
+
+  function renderConflicts() {
+    const conflicts = [];
+    DB.schedules.forEach((s1, i) => {
+      DB.schedules.slice(i + 1).forEach(s2 => {
+        if (s1.day !== s2.day) return;
+        const overlap = s1.startTime < s2.endTime && s1.endTime > s2.startTime;
+        if (!overlap) return;
+        if (s1.facultyId === s2.facultyId) conflicts.push({ type: 'Faculty', detail: `${s1.facultyName} has overlapping classes`, s1, s2 });
+        if (s1.roomId === s2.roomId) conflicts.push({ type: 'Room', detail: `${s1.room} is double-booked`, s1, s2 });
+        if (s1.section === s2.section) conflicts.push({ type: 'Section', detail: `Section ${s1.section} has overlapping classes`, s1, s2 });
+      });
+    });
+
+    document.getElementById('conflicts-content').innerHTML = `
+      <div class="d-flex justify-between align-center mb-2">
+        <h3 style="font-size:15px;font-weight:700">Conflict Detection Report</h3>
+        <span class="badge badge-${conflicts.length ? 'danger' : 'success'}">${conflicts.length} conflict${conflicts.length !== 1 ? 's' : ''} found</span>
+      </div>
+      ${conflicts.length ? conflicts.map(c => `
+        <div class="alert alert-danger">
+          <div>
+            <div class="fw-bold">⚠ ${c.type} Conflict: ${c.detail}</div>
+            <div style="font-size:12px;margin-top:4px">
+              <strong>${c.s1.subjectCode}</strong> (${c.s1.section}, ${c.s1.startTime}–${c.s1.endTime}) vs
+              <strong>${c.s2.subjectCode}</strong> (${c.s2.section}, ${c.s2.startTime}–${c.s2.endTime}) — ${c.s1.day}
+            </div>
+          </div>
+        </div>`).join('') :
+        '<div class="alert alert-success">✓ No scheduling conflicts detected. All schedules are clear.</div>'}`;
+  }
+
+  function renderRequests() {
+    let requests = DB.changeRequests;
+    if (role === 'faculty') requests = requests.filter(r => r.facultyId === Auth.currentUser.id);
+    document.getElementById('requests-list').innerHTML = requests.length ? `
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th>Faculty</th><th>Type</th><th>Reason</th><th>Details</th><th>Date</th><th>Status</th>${role !== 'faculty' ? '<th>Actions</th>' : ''}</tr></thead>
+          <tbody>
+            ${requests.map(r => `<tr>
+              <td>${r.facultyName}</td>
+              <td><span class="badge badge-primary">${r.type}</span></td>
+              <td style="font-size:12px">${r.reason}</td>
+              <td style="font-size:12px">${r.requestedDay ? `Move to ${r.requestedDay} ${r.requestedTime}` : r.requestedRoom ? `Room: ${r.requestedRoom}` : '–'}</td>
+              <td style="font-size:12px">${r.date}</td>
+              <td><span class="badge badge-${r.status==='pending'?'warning':r.status==='approved'?'success':'danger'}">${r.status}</span></td>
+              ${role !== 'faculty' ? `<td>
+                ${r.status === 'pending' ? `
+                  <button class="btn btn-sm btn-success" onclick="approveRequest(${r.id})">Approve</button>
+                  <button class="btn btn-sm btn-danger" onclick="rejectRequest(${r.id})">Reject</button>` : '–'}
+              </td>` : ''}
+            </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>` : '<div class="empty-state"><p>No change requests found.</p></div>';
+  }
+
+  function approveRequest(id) {
+    const r = DB.changeRequests.find(x => x.id === id);
+    r.status = 'approved';
+    UI.showToast('Request approved.');
+    renderRequests();
+  }
+
+  function rejectRequest(id) {
+    const r = DB.changeRequests.find(x => x.id === id);
+    r.status = 'rejected';
+    UI.showToast('Request rejected.', 'warning');
+    renderRequests();
+  }
+
+  function openAddSchedule() {
+    // Populate dropdowns fresh each time so newly added data appears
+    const subjSel = document.getElementById('sf-subject');
+    subjSel.innerHTML = '<option value="">-- Select Subject --</option>' +
+      DB.subjects.map(s => `<option value="${s.id}">${s.code} – ${s.title}</option>`).join('');
+
+    const facSel = document.getElementById('sf-faculty');
+    facSel.innerHTML = '<option value="">-- Select Faculty --</option>' +
+      DB.users.filter(u => u.role === 'faculty' && u.status === 'active')
+        .map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+
+    const roomSel = document.getElementById('sf-room');
+    roomSel.innerHTML = '<option value="">-- Select Room --</option>' +
+      DB.rooms.filter(r => r.status === 'available')
+        .map(r => `<option value="${r.id}">${r.number} (${r.type})</option>`).join('');
+
+    document.getElementById('sf-subject-title').value = '';
+    document.getElementById('sf-section').value = '';
+    document.getElementById('sf-start').value = '07:30';
+    document.getElementById('sf-end').value = '09:00';
+    document.getElementById('sf-students').value = '30';
+    document.getElementById('sched-error').style.display = 'none';
+    document.getElementById('sched-conflict-alert').style.display = 'none';
+    UI.openModal('sched-modal');
+  }
+
+  // Auto-fill subject title when subject is selected
+  document.addEventListener('change', function(e) {
+    if (e.target.id === 'sf-subject') {
+      const subj = DB.subjects.find(s => s.id == e.target.value);
+      document.getElementById('sf-subject-title').value = subj ? subj.title : '';
+    }
+  });
+
+  function checkConflict(facultyId, roomId, day, start, end, excludeId = null) {
+    return DB.schedules.filter(s => s.id !== excludeId).find(s => {
+      if (s.day !== day) return false;
+      return start < s.endTime && end > s.startTime && (s.facultyId == facultyId || s.roomId == roomId);
+    });
+  }
+
+  function saveSchedule() {
+    const sid = document.getElementById('sf-subject').value;
+    const fid = document.getElementById('sf-faculty').value;
+    const section = document.getElementById('sf-section').value.trim();
+    const rid = document.getElementById('sf-room').value;
+    const day = document.getElementById('sf-day').value;
+    const start = document.getElementById('sf-start').value;
+    const end = document.getElementById('sf-end').value;
+    document.getElementById('sched-error').style.display = 'none';
+    document.getElementById('sched-conflict-alert').style.display = 'none';
+    if (!sid || !fid || !section || !rid || !start || !end) { document.getElementById('sched-error').style.display = 'flex'; return; }
+    if (start >= end) { document.getElementById('sched-error').textContent = 'End time must be after start time.'; document.getElementById('sched-error').style.display = 'flex'; return; }
+    const conflict = checkConflict(fid, rid, day, start, end);
+    if (conflict) {
+      const ca = document.getElementById('sched-conflict-alert');
+      ca.style.display = 'flex';
+      ca.innerHTML = `⚠ Conflict with <strong>${conflict.subjectCode}</strong> (${conflict.facultyName}, ${conflict.room}) on ${conflict.day} ${conflict.startTime}–${conflict.endTime}.`;
+      return;
+    }
+    const subj = DB.subjects.find(s => s.id == sid);
+    const faculty = DB.users.find(u => u.id == fid);
+    const room = DB.rooms.find(r => r.id == rid);
+    DB.schedules.push({
+      id: DB.nextId('schedules'),
+      subjectId: subj.id, subjectCode: subj.code, subjectTitle: subj.title,
+      facultyId: faculty.id, facultyName: faculty.name,
+      roomId: room.id, room: room.number,
+      section, day, startTime: start, endTime: end,
+      type: document.getElementById('sf-type').value,
+      semester: '1st', schoolYear: '2025-2026',
+      students: parseInt(document.getElementById('sf-students').value) || 30
+    });
+    UI.closeModal('sched-modal');
+    UI.showToast('Schedule added.');
+    renderVisual();
+  }
+
+  function deleteSchedule(id) {
+    UI.confirm('Delete this schedule?', () => {
+      DB.schedules = DB.schedules.filter(s => s.id !== id);
+      UI.showToast('Schedule deleted.', 'warning');
+      renderList();
+    });
+  }
+
+  function openRequestModal() {
+    const sel = document.getElementById('req-schedule');
+    const source = role === 'faculty'
+      ? DB.schedules.filter(s => s.facultyId === Auth.currentUser.id)
+      : DB.schedules;
+    sel.innerHTML = '<option value="">-- Select Schedule --</option>' +
+      source.map(s => `<option value="${s.id}">${s.subjectCode} – ${s.section} (${s.day} ${s.startTime})</option>`).join('');
+    document.getElementById('req-reason').value = '';
+    document.getElementById('req-details').value = '';
+    UI.openModal('request-modal');
+  }
+
+  function submitRequest() {
+    const schedId = document.getElementById('req-schedule').value;
+    const reason = document.getElementById('req-reason').value.trim();
+    if (!schedId || !reason) { UI.showToast('Please fill in required fields.', 'error'); return; }
+    const sched = DB.schedules.find(s => s.id == schedId);
+    DB.changeRequests.push({
+      id: DB.nextId('changeRequests'),
+      facultyId: Auth.currentUser.id,
+      facultyName: Auth.currentUser.name,
+      scheduleId: parseInt(schedId),
+      type: document.getElementById('req-type').value,
+      reason,
+      requestedDetails: document.getElementById('req-details').value,
+      status: 'pending',
+      date: new Date().toISOString().split('T')[0]
+    });
+    UI.closeModal('request-modal');
+    UI.showToast('Change request submitted.');
+    renderRequests();
+  }
+
+  document.getElementById('vis-filter').addEventListener('change', updateVisFilter);
+  updateVisFilter();
+</script>
+</body>
+</html>

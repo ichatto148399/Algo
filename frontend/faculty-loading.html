@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Faculty Loading – UMSync</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <main class="page-content">
+
+      <div class="page-header">
+        <div><h2>Faculty Loading</h2><p>Assign subjects and manage teaching loads</p></div>
+        <button class="btn btn-primary" onclick="openAssignModal()">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Assign Subject
+        </button>
+      </div>
+
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('loading')">Loading Summary</button>
+        <button class="tab-btn" onclick="switchTab('assignments')">All Assignments</button>
+        <button class="tab-btn" onclick="switchTab('overload')">Overload Requests</button>
+      </div>
+
+      <!-- Loading Summary Tab -->
+      <div class="tab-pane active" id="tab-loading">
+        <div id="faculty-cards"></div>
+      </div>
+
+      <!-- All Assignments Tab -->
+      <div class="tab-pane" id="tab-assignments">
+        <div class="card">
+          <div class="card-body">
+            <div class="toolbar">
+              <div class="search-box">
+                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="assign-search" placeholder="Search..." oninput="renderAssignments()">
+              </div>
+              <select class="filter-select" id="assign-filter-faculty" onchange="renderAssignments()">
+                <option value="">All Faculty</option>
+              </select>
+            </div>
+            <div class="table-wrapper">
+              <table>
+                <thead><tr><th>Faculty</th><th>Subject</th><th>Section</th><th>Room</th><th>Schedule</th><th>Units</th><th>Actions</th></tr></thead>
+                <tbody id="assignments-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Overload Tab -->
+      <div class="tab-pane" id="tab-overload">
+        <div class="card">
+          <div class="card-body">
+            <div class="alert alert-info">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+              Faculty exceeding their maximum teaching load require overload approval.
+            </div>
+            <div id="overload-list"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Assign Modal -->
+<div class="modal-overlay" id="assign-modal">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h3 id="assign-modal-title">Assign Subject to Faculty</h3>
+      <button class="modal-close" onclick="UI.closeModal('assign-modal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Faculty Member *</label>
+          <select id="af-faculty" class="form-control" onchange="updateLoadPreview()">
+            <option value="">-- Select Faculty --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Subject *</label>
+          <select id="af-subject" class="form-control" onchange="updateLoadPreview()">
+            <option value="">-- Select Subject --</option>
+          </select>
+        </div>
+      </div>
+      <div id="load-preview" style="display:none" class="alert alert-info mb-2"></div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Section *</label>
+          <input type="text" id="af-section" class="form-control" placeholder="e.g. BSIT-1A">
+        </div>
+        <div class="form-group">
+          <label>Room *</label>
+          <select id="af-room" class="form-control">
+            <option value="">-- Select Room --</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Day *</label>
+          <select id="af-day" class="form-control">
+            <option>Monday</option><option>Tuesday</option><option>Wednesday</option>
+            <option>Thursday</option><option>Friday</option><option>Saturday</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Start Time *</label>
+          <input type="time" id="af-start" class="form-control" value="07:30">
+        </div>
+        <div class="form-group">
+          <label>End Time *</label>
+          <input type="time" id="af-end" class="form-control" value="09:00">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Class Type</label>
+          <select id="af-type" class="form-control"><option>Lecture</option><option>Lab</option></select>
+        </div>
+        <div class="form-group">
+          <label>No. of Students</label>
+          <input type="number" id="af-students" class="form-control" value="30" min="1">
+        </div>
+      </div>
+      <div id="conflict-alert" class="alert alert-danger" style="display:none"></div>
+      <div id="assign-error" class="alert alert-danger" style="display:none">Please fill in all required fields.</div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="UI.closeModal('assign-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAssignment()">Save Assignment</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  Auth.requireAuth(['admin','registrar']);
+  UI.renderSidebar('faculty-loading');
+  UI.renderTopbar('Faculty Loading', 'Assign and manage teaching loads');
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['loading','assignments','overload'][i] === tab));
+    document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', ['tab-loading','tab-assignments','tab-overload'][i] === `tab-${tab}`));
+    if (tab === 'assignments') renderAssignments();
+    if (tab === 'overload') renderOverload();
+  }
+
+  function renderFacultyCards() {
+    const faculty = DB.users.filter(u => u.role === 'faculty');
+    document.getElementById('faculty-cards').innerHTML = faculty.map(f => {
+      const schedules = DB.schedules.filter(s => s.facultyId === f.id);
+      const units = schedules.reduce((sum, s) => { const subj = DB.subjects.find(sub => sub.id === s.subjectId); return sum + (subj ? subj.units : 0); }, 0);
+      const maxUnits = f.maxUnits || 21;
+      const pct = Math.min(Math.round((units / maxUnits) * 100), 100);
+      const color = pct > 100 ? 'red' : pct > 80 ? 'orange' : 'green';
+      const isOverload = units > maxUnits;
+      return `
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header">
+            <div class="d-flex align-center gap-3">
+              <div class="user-avatar" style="background:var(--primary-light);color:white;width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700">
+                ${f.name.split(' ').map(n=>n[0]).join('').substring(0,2)}
+              </div>
+              <div>
+                <div class="fw-bold">${f.name}</div>
+                <div class="text-muted" style="font-size:12px">${f.employeeId || ''} · ${f.department}</div>
+              </div>
+            </div>
+            <div class="d-flex align-center gap-2">
+              ${isOverload ? '<span class="badge badge-danger">Overload</span>' : ''}
+              <span class="badge badge-${f.status==='active'?'success':'secondary'}">${f.status}</span>
+              <span style="font-size:13px;font-weight:700">${units}/${maxUnits} units</span>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="progress-bar-wrap" style="margin-bottom:12px"><div class="progress-bar ${color}" style="width:${pct}%"></div></div>
+            ${schedules.length ? `
+              <div class="table-wrapper">
+                <table>
+                  <thead><tr><th>Subject</th><th>Section</th><th>Room</th><th>Day/Time</th><th>Units</th><th></th></tr></thead>
+                  <tbody>
+                    ${schedules.map(s => {
+                      const subj = DB.subjects.find(sub => sub.id === s.subjectId);
+                      return `<tr>
+                        <td><div class="fw-bold">${s.subjectCode}</div><div class="text-muted" style="font-size:11px">${s.subjectTitle}</div></td>
+                        <td>${s.section}</td>
+                        <td><span class="badge badge-info">${s.room}</span></td>
+                        <td style="font-size:12px">${s.day}<br>${s.startTime}–${s.endTime}</td>
+                        <td style="text-align:center">${subj ? subj.units : '–'}</td>
+                        <td><button class="btn btn-sm btn-danger" onclick="removeAssignment(${s.id})">Remove</button></td>
+                      </tr>`;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>` : '<div class="text-muted" style="font-size:13px;text-align:center;padding:12px">No subjects assigned yet.</div>'}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function renderAssignments() {
+    // Refresh faculty filter options
+    const facFilter = document.getElementById('assign-filter-faculty');
+    const curVal = facFilter.value;
+    facFilter.innerHTML = '<option value="">All Faculty</option>' +
+      DB.users.filter(u => u.role === 'faculty')
+        .map(f => `<option value="${f.id}" ${f.id==curVal?'selected':''}>${f.name}</option>`).join('');
+
+    const search = document.getElementById('assign-search').value.toLowerCase();
+    const fid = facFilter.value;
+    let data = DB.schedules.filter(s =>
+      (!search || s.subjectCode.toLowerCase().includes(search) || s.facultyName.toLowerCase().includes(search) || s.section.toLowerCase().includes(search)) &&
+      (!fid || s.facultyId == fid)
+    );
+    document.getElementById('assignments-tbody').innerHTML = data.map(s => {
+      const subj = DB.subjects.find(sub => sub.id === s.subjectId);
+      return `<tr>
+        <td>${s.facultyName}</td>
+        <td><span class="badge badge-primary">${s.subjectCode}</span> ${s.subjectTitle}</td>
+        <td>${s.section}</td>
+        <td>${s.room}</td>
+        <td style="font-size:12px">${s.day} ${s.startTime}–${s.endTime}</td>
+        <td style="text-align:center">${subj ? subj.units : '–'}</td>
+        <td><button class="btn btn-sm btn-danger" onclick="removeAssignment(${s.id})">Remove</button></td>
+      </tr>`;
+    }).join('') || '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:20px">No assignments found.</td></tr>';
+  }
+
+  function renderOverload() {
+    const faculty = DB.users.filter(u => u.role === 'faculty');
+    const overloaded = faculty.filter(f => {
+      const units = DB.schedules.filter(s => s.facultyId === f.id).reduce((sum, s) => { const subj = DB.subjects.find(sub => sub.id === s.subjectId); return sum + (subj ? subj.units : 0); }, 0);
+      return units > (f.maxUnits || 21);
+    });
+    document.getElementById('overload-list').innerHTML = overloaded.length ?
+      overloaded.map(f => {
+        const units = DB.schedules.filter(s => s.facultyId === f.id).reduce((sum, s) => { const subj = DB.subjects.find(sub => sub.id === s.subjectId); return sum + (subj ? subj.units : 0); }, 0);
+        return `<div class="alert alert-warning d-flex justify-between align-center">
+          <div><strong>${f.name}</strong> — ${units} units assigned (max: ${f.maxUnits}). Overload: ${units - f.maxUnits} units.</div>
+          <button class="btn btn-sm btn-warning" onclick="UI.showToast('Overload approval sent for ${f.name}')">Approve Overload</button>
+        </div>`;
+      }).join('') : '<div class="empty-state"><p>No overload cases detected.</p></div>';
+  }
+
+  function updateLoadPreview() {
+    const fid = document.getElementById('af-faculty').value;
+    const sid = document.getElementById('af-subject').value;
+    const preview = document.getElementById('load-preview');
+    if (!fid || !sid) { preview.style.display = 'none'; return; }
+    const faculty = DB.users.find(u => u.id == fid);
+    const subj = DB.subjects.find(s => s.id == sid);
+    const current = DB.schedules.filter(s => s.facultyId == fid).reduce((sum, s) => { const sub = DB.subjects.find(x => x.id === s.subjectId); return sum + (sub ? sub.units : 0); }, 0);
+    const newTotal = current + subj.units;
+    const isOver = newTotal > faculty.maxUnits;
+    preview.className = `alert alert-${isOver ? 'warning' : 'info'}`;
+    preview.style.display = 'flex';
+    preview.innerHTML = `Current load: ${current} units. Adding ${subj.units} units → Total: <strong>${newTotal}/${faculty.maxUnits}</strong>${isOver ? ' ⚠ Overload!' : ' ✓ Within limit'}`;
+  }
+
+  function openAssignModal() {
+    // Populate all dropdowns fresh from current DB state
+    document.getElementById('af-faculty').innerHTML = '<option value="">-- Select Faculty --</option>' +
+      DB.users.filter(u => u.role === 'faculty' && u.status === 'active')
+        .map(f => `<option value="${f.id}">${f.name}${f.department ? ' (' + f.department + ')' : ''}</option>`).join('');
+
+    document.getElementById('af-subject').innerHTML = '<option value="">-- Select Subject --</option>' +
+      DB.subjects.map(s => `<option value="${s.id}">${s.code} – ${s.title} (${s.units} units)</option>`).join('');
+
+    document.getElementById('af-room').innerHTML = '<option value="">-- Select Room --</option>' +
+      DB.rooms.filter(r => r.status === 'available')
+        .map(r => `<option value="${r.id}">${r.number} (${r.type}, Cap: ${r.capacity})</option>`).join('');
+
+    document.getElementById('af-section').value = '';
+    document.getElementById('af-start').value = '07:30';
+    document.getElementById('af-end').value = '09:00';
+    document.getElementById('af-students').value = '30';
+    document.getElementById('assign-error').style.display = 'none';
+    document.getElementById('conflict-alert').style.display = 'none';
+    document.getElementById('load-preview').style.display = 'none';
+    UI.openModal('assign-modal');
+  }
+
+  function checkConflict(facultyId, roomId, day, start, end, excludeId = null) {
+    return DB.schedules.filter(s => s.id !== excludeId).find(s => {
+      if (s.day !== day) return false;
+      const sStart = s.startTime, sEnd = s.endTime;
+      const overlap = start < sEnd && end > sStart;
+      return overlap && (s.facultyId == facultyId || s.roomId == roomId);
+    });
+  }
+
+  function saveAssignment() {
+    const fid = document.getElementById('af-faculty').value;
+    const sid = document.getElementById('af-subject').value;
+    const section = document.getElementById('af-section').value.trim();
+    const rid = document.getElementById('af-room').value;
+    const day = document.getElementById('af-day').value;
+    const start = document.getElementById('af-start').value;
+    const end = document.getElementById('af-end').value;
+
+    document.getElementById('assign-error').style.display = 'none';
+    document.getElementById('conflict-alert').style.display = 'none';
+
+    if (!fid || !sid || !section || !rid || !start || !end) {
+      document.getElementById('assign-error').style.display = 'flex'; return;
+    }
+    if (start >= end) {
+      document.getElementById('assign-error').style.display = 'flex';
+      document.getElementById('assign-error').textContent = 'End time must be after start time.'; return;
+    }
+
+    const conflict = checkConflict(fid, rid, day, start, end);
+    if (conflict) {
+      const ca = document.getElementById('conflict-alert');
+      ca.style.display = 'flex';
+      ca.innerHTML = `⚠ Scheduling conflict detected with <strong>${conflict.subjectCode}</strong> (${conflict.facultyName}, ${conflict.room}) on ${conflict.day} ${conflict.startTime}–${conflict.endTime}.`;
+      return;
+    }
+
+    const faculty = DB.users.find(u => u.id == fid);
+    const subj = DB.subjects.find(s => s.id == sid);
+    const room = DB.rooms.find(r => r.id == rid);
+
+    DB.schedules.push({
+      id: DB.nextId('schedules'),
+      subjectId: subj.id, subjectCode: subj.code, subjectTitle: subj.title,
+      facultyId: faculty.id, facultyName: faculty.name,
+      roomId: room.id, room: room.number,
+      section, day, startTime: start, endTime: end,
+      type: document.getElementById('af-type').value,
+      semester: '1st', schoolYear: '2025-2026',
+      students: parseInt(document.getElementById('af-students').value) || 30
+    });
+
+    UI.closeModal('assign-modal');
+    UI.showToast('Subject assigned successfully.');
+    renderFacultyCards();
+  }
+
+  function removeAssignment(id) {
+    UI.confirm('Remove this assignment?', () => {
+      DB.schedules = DB.schedules.filter(s => s.id !== id);
+      UI.showToast('Assignment removed.', 'warning');
+      renderFacultyCards();
+      renderAssignments();
+    });
+  }
+
+  renderFacultyCards();
+</script>
+</body>
+</html>
