@@ -146,7 +146,8 @@
 </div>
 
 <script src="js/data.js"></script>
-<script src="js/auth.js"></script>
+<script src="../backend/storage.js"></script>
+<script src="../backend/auth.js"></script>
 <script>
   Auth.requireAuth(['admin']);
   UI.renderSidebar('users');
@@ -258,6 +259,7 @@
       UI.showToast('User updated.');
     } else {
       DB.users.push({ id: DB.nextId('users'), ...data });
+      Storage.save();
       UI.showToast('User added.');
     }
     UI.closeModal('user-modal');
@@ -268,6 +270,7 @@
   function toggleStatus(id) {
     const u = DB.users.find(x => x.id === id);
     u.status = u.status === 'active' ? 'inactive' : 'active';
+    Storage.save();
     UI.showToast(`User ${u.status === 'active' ? 'activated' : 'deactivated'}.`);
     renderUsers();
   }
@@ -275,6 +278,7 @@
   function deleteUser(id) {
     UI.confirm('Delete this user? This cannot be undone.', () => {
       DB.users = DB.users.filter(u => u.id !== id);
+      Storage.save();
       UI.showToast('User deleted.', 'warning');
       renderUsers();
       updateCounts();

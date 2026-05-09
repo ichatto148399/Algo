@@ -133,7 +133,8 @@
 </div>
 
 <script src="js/data.js"></script>
-<script src="js/auth.js"></script>
+<script src="../backend/storage.js"></script>
+<script src="../backend/auth.js"></script>
 <script>
   Auth.requireAuth();
   const isReadOnly = Auth.currentUser.role === 'faculty';
@@ -302,9 +303,11 @@
     if (editingRoomId) {
       const idx = DB.rooms.findIndex(r => r.id === editingRoomId);
       DB.rooms[idx] = { ...DB.rooms[idx], ...data };
+      Storage.save();
       UI.showToast('Room updated.');
     } else {
       DB.rooms.push({ id: DB.nextId('rooms'), ...data });
+      Storage.save();
       UI.showToast('Room added.');
     }
     UI.closeModal('room-modal');
@@ -314,6 +317,7 @@
   function deleteRoom(id) {
     UI.confirm('Delete this room?', () => {
       DB.rooms = DB.rooms.filter(r => r.id !== id);
+      Storage.save();
       UI.showToast('Room deleted.', 'warning');
       renderRooms();
     });

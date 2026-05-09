@@ -192,7 +192,8 @@
 </div>
 
 <script src="js/data.js"></script>
-<script src="js/auth.js"></script>
+<script src="../backend/storage.js"></script>
+<script src="../backend/auth.js"></script>
 <script>
   Auth.requireAuth(['admin','registrar']);
   UI.renderSidebar('subjects');
@@ -322,7 +323,8 @@
       DB.subjects[idx] = { ...DB.subjects[idx], ...data };
       UI.showToast('Subject updated.');
     } else {
-      DB.subjects.push({ id: DB.nextId('subjects'), ...data });
+      Storage.save();
+    DB.subjects.push({ id: DB.nextId('subjects'), ...data });
       UI.showToast('Subject added.');
     }
     UI.closeModal('subject-modal');
@@ -331,6 +333,7 @@
 
   function deleteSubject(id) {
     UI.confirm('Delete this subject?', () => {
+      Storage.save();
       DB.subjects = DB.subjects.filter(s => s.id !== id);
       UI.showToast('Subject deleted.', 'warning');
       renderTable();
@@ -394,6 +397,7 @@
       document.getElementById('dept-error').textContent = 'Department code already exists.';
       document.getElementById('dept-error').style.display = 'flex'; return;
     }
+    Storage.save();
     DB.departments.push({ id: DB.nextId('departments'), code, name });
     document.getElementById('new-dept-code').value = '';
     document.getElementById('new-dept-name').value = '';
@@ -407,6 +411,7 @@
     const hasPrograms = DB.programs.some(p => p.departmentId === id);
     if (hasPrograms) { UI.showToast('Remove all programs under this department first.', 'error'); return; }
     UI.confirm('Delete this department?', () => {
+      Storage.save();
       DB.departments = DB.departments.filter(d => d.id !== id);
       renderDeptTable();
       refreshNewProgDeptSelect();
@@ -425,6 +430,7 @@
       document.getElementById('prog-error').textContent = 'Program code already exists.';
       document.getElementById('prog-error').style.display = 'flex'; return;
     }
+    Storage.save();
     DB.programs.push({ id: DB.nextId('programs'), code, name, departmentId: deptId });
     document.getElementById('new-prog-code').value = '';
     document.getElementById('new-prog-name').value = '';
@@ -434,6 +440,7 @@
 
   function deleteProgram(id) {
     UI.confirm('Delete this program?', () => {
+      Storage.save();
       DB.programs = DB.programs.filter(p => p.id !== id);
       renderProgTable();
       UI.showToast('Program deleted.', 'warning');

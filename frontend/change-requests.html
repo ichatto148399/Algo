@@ -87,7 +87,8 @@
 </div>
 
 <script src="js/data.js"></script>
-<script src="js/auth.js"></script>
+<script src="../backend/storage.js"></script>
+<script src="../backend/auth.js"></script>
 <script>
   Auth.requireAuth(['faculty']);
   UI.renderSidebar('change-requests');
@@ -142,6 +143,7 @@
     document.getElementById('req-error').style.display = 'none';
     if (!schedId || !reason) { document.getElementById('req-error').style.display = 'flex'; return; }
 
+    Storage.save();
     DB.changeRequests.push({
       id: DB.nextId('changeRequests'),
       facultyId: user.id,
@@ -171,6 +173,7 @@
 
   function cancelRequest(id) {
     UI.confirm('Cancel this request?', () => {
+      Storage.save();
       DB.changeRequests = DB.changeRequests.filter(r => r.id !== id);
       UI.showToast('Request cancelled.', 'warning');
       renderRequests();
