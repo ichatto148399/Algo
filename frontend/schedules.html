@@ -6,26 +6,9 @@
   <title>Schedules – UMSync</title>
   <link rel="stylesheet" href="css/style.css">
   <style>
-    .live-badge { 
-      display:inline-flex;
-      align-items:center;
-      gap:6px;
-      background:rgba(40,167,69,0.12);
-      color:var(--success);
-      padding:4px 12px;
-      border-radius:20px;
-      font-size:12px;
-      font-weight:700; 
-    }
-    .live-dot { 
-      width:8px;
-      height:8px;
-      border-radius:50%;
-      background:var(--success);
-      animation:pulse 1.5s infinite; 
-    }
-    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} 
-  }
+    .live-badge { display:inline-flex;align-items:center;gap:6px;background:rgba(40,167,69,0.12);color:var(--success);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700; }
+    .live-dot { width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
   </style>
 </head>
 <body>
@@ -61,13 +44,13 @@
         <div class="card">
           <div class="card-body">
             <div class="toolbar">
-              <select class="filter-select" id="vis-filter" onchange="renderVisual()" style="min-width:180px">
+              <select class="filter-select" id="vis-filter" onchange="updateVisFilter()" style="min-width:180px">
                 <option value="all">All Schedules</option>
                 <option value="faculty">By Faculty</option>
                 <option value="room">By Room</option>
                 <option value="section">By Section</option>
               </select>
-              <select class="filter-select" id="vis-value" onchange="renderVisual()" style="min-width:200px"></select>
+              <select class="filter-select" id="vis-value" onchange="renderVisual()" style="min-width:200px;display:none"></select>
             </div>
             <div class="schedule-grid" id="visual-grid"></div>
           </div>
@@ -102,7 +85,14 @@
       <!-- Conflicts Tab -->
       <div class="tab-pane" id="tab-conflicts">
         <div class="card">
-          <div class="card-body" id="conflicts-content"></div>
+          <div class="card-body">
+            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px">
+              <strong>🔬 Algorithms running on this page:</strong>
+              &nbsp;|&nbsp; <span style="color:var(--primary)">① Backtracking</span> — detects faculty, room & section conflicts
+              &nbsp;|&nbsp; <span style="color:var(--primary)">② Kahn's Algorithm</span> — orders subjects by prerequisites (topological sort)
+            </div>
+            <div id="conflicts-content"></div>
+          </div>
         </div>
       </div>
 
@@ -129,11 +119,14 @@
       <h3 id="sched-modal-title">Add Schedule</h3>
       <button class="modal-close" onclick="UI.closeModal('sched-modal')">✕</button>
     </div>
+    <div style="background:#f0f4ff;border-left:3px solid var(--primary);padding:8px 12px;font-size:11px;color:var(--primary);margin:0 20px 4px">
+      🔬 <strong>Backtracking</strong> checks conflicts on save &nbsp;·&nbsp; <strong>Greedy FFD</strong> suggests faculty &nbsp;·&nbsp; <strong>Dijkstra</strong> suggests best room
+    </div>
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group">
-          <label>Subject Code *</label>
-          <select id="sf-subject" class="form-control">
+          <label>Subject *</label>
+          <select id="sf-subject" class="form-control" onchange="onSubjectChange()">
             <option value="">-- Select Subject --</option>
           </select>
         </div>
@@ -144,7 +137,7 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Faculty *</label>
+          <label>Faculty * <button type="button" class="btn btn-sm" style="font-size:10px;padding:2px 8px;margin-left:6px;background:var(--primary);color:white;border-radius:4px" onclick="suggestFaculty()" title="Greedy FFD Algorithm">⚡ Suggest (Greedy FFD)</button></label>
           <select id="sf-faculty" class="form-control">
             <option value="">-- Select Faculty --</option>
           </select>
@@ -156,7 +149,7 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Room *</label>
+          <label>Room * <button type="button" class="btn btn-sm" style="font-size:10px;padding:2px 8px;margin-left:6px;background:var(--primary);color:white;border-radius:4px" onclick="suggestRoom()" title="Dijkstra on DAG Algorithm">⚡ Suggest (Dijkstra)</button></label>
           <select id="sf-room" class="form-control">
             <option value="">-- Select Room --</option>
           </select>
@@ -169,7 +162,7 @@
           </select>
         </div>
       </div>
-      <div class="form-row-3">
+      <div class="form-row">
         <div class="form-group">
           <label>Start Time *</label>
           <input type="time" id="sf-start" class="form-control" value="07:30">
@@ -196,6 +189,7 @@
     </div>
   </div>
 </div>
+
 <!-- Change Request Modal -->
 <div class="modal-overlay" id="request-modal">
   <div class="modal">
@@ -218,7 +212,7 @@
       </div>
       <div class="form-group">
         <label>Reason *</label>
-        <textarea id="req-reason" class="form-control" placeholder="Explain the reason for this request..."></textarea>
+        <textarea id="req-reason" class="form-control" rows="3" placeholder="Explain the reason for this request..."></textarea>
       </div>
       <div class="form-group">
         <label>Requested Change Details</label>
@@ -232,56 +226,73 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="../backend/storage.js"></script>
-<script src="../backend/auth.js"></script>
+<script src="js/auth.js"></script>
 <script>
   Auth.requireAuth();
   const role = Auth.currentUser.role;
   UI.renderSidebar('schedules');
   UI.renderTopbar('Schedule Management', 'Class schedules and conflict detection');
-  if (role === 'faculty') {
-    document.getElementById('add-sched-btn').style.display = 'none';
-    document.getElementById('new-request-btn').textContent = 'New Request';
-  }
+  if (role === 'faculty') document.getElementById('add-sched-btn').style.display = 'none';
 
-  const DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const BACKEND = '../backend/';
+  const DAYS  = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const TIMES = ['07:30','08:00','08:30','09:00','09:30','10:00','10:30','11:00','11:30','12:00','12:30','13:00','13:30','14:00','14:30','15:00','15:30','16:00','16:30','17:00','17:30'];
   const COLORS = ['color-1','color-2','color-3','color-4','color-5','color-6'];
 
+  // ── State loaded from PHP ──
+  let schedules = [], faculties = [], rooms = [], subjects = [], editingSchedId = null;
+
+  async function loadAll() {
+    const [sRes, uRes, rRes, subRes] = await Promise.all([
+      fetch(BACKEND + 'schedules.php?action=get_all'),
+      fetch(BACKEND + 'users.php',    { method:'POST', body: (() => { const f=new FormData(); f.append('action','get_all'); return f; })() }),
+      fetch(BACKEND + 'rooms.php',    { method:'POST', body: (() => { const f=new FormData(); f.append('action','get_all'); return f; })() }),
+      fetch(BACKEND + 'subjects.php?action=get_subjects')
+    ]);
+    const [sData, uData, rData, subData] = await Promise.all([sRes.json(), uRes.json(), rRes.json(), subRes.json()]);
+    if (sData.success)   schedules = sData.data;
+    if (uData.success)   faculties = uData.data.filter(u => u.role === 'faculty');
+    if (rData.success)   rooms     = rData.data;
+    if (subData.success) subjects  = subData.data;
+    updateVisFilter();
+    renderVisual();
+  }
+
+  // ── Tab switching ──
   function switchTab(tab) {
     const tabs = ['visual','list','conflicts','requests'];
     document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', tabs[i] === tab));
     document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', `tab-${tabs[i]}` === `tab-${tab}`));
-    if (tab === 'list') renderList();
+    if (tab === 'list')      renderList();
     if (tab === 'conflicts') renderConflicts();
-    if (tab === 'requests') renderRequests();
+    if (tab === 'requests')  renderRequests();
   }
 
+  // ── Visual schedule ──
   function updateVisFilter() {
     const type = document.getElementById('vis-filter').value;
-    const sel = document.getElementById('vis-value');
+    const sel  = document.getElementById('vis-value');
     sel.innerHTML = '';
     if (type === 'all') { sel.style.display = 'none'; renderVisual(); return; }
     sel.style.display = '';
-    if (type === 'faculty') DB.users.filter(u=>u.role==='faculty').forEach(f => sel.add(new Option(f.name, f.id)));
-    if (type === 'room') DB.rooms.forEach(r => sel.add(new Option(r.number, r.id)));
-    if (type === 'section') [...new Set(DB.schedules.map(s=>s.section))].forEach(sec => sel.add(new Option(sec, sec)));
+    if (type === 'faculty') faculties.forEach(f => sel.add(new Option(f.name, f.id)));
+    if (type === 'room')    rooms.forEach(r => sel.add(new Option(r.number, r.id)));
+    if (type === 'section') [...new Set(schedules.map(s => s.section))].sort().forEach(sec => sel.add(new Option(sec, sec)));
     renderVisual();
   }
 
   function renderVisual() {
     const type = document.getElementById('vis-filter').value;
-    const val = document.getElementById('vis-value').value;
-    let schedules = DB.schedules;
-    if (type === 'faculty' && val) schedules = schedules.filter(s => s.facultyId == val);
-    if (type === 'room' && val) schedules = schedules.filter(s => s.roomId == val);
-    if (type === 'section' && val) schedules = schedules.filter(s => s.section === val);
-    if (role === 'faculty') schedules = schedules.filter(s => s.facultyId === Auth.currentUser.id);
+    const val  = document.getElementById('vis-value').value;
+    let data   = schedules;
+    if (type === 'faculty' && val) data = data.filter(s => String(s.faculty_id) === String(val));
+    if (type === 'room'    && val) data = data.filter(s => String(s.room_id)    === String(val));
+    if (type === 'section' && val) data = data.filter(s => s.section === val);
+    if (role === 'faculty') data = data.filter(s => String(s.faculty_id) === String(Auth.currentUser.id));
 
     const colorMap = {};
     let colorIdx = 0;
-    schedules.forEach(s => { if (!colorMap[s.subjectCode]) colorMap[s.subjectCode] = COLORS[colorIdx++ % COLORS.length]; });
+    data.forEach(s => { if (!colorMap[s.subject_code]) colorMap[s.subject_code] = COLORS[colorIdx++ % COLORS.length]; });
 
     let html = `<div style="display:grid;grid-template-columns:80px repeat(6,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden;min-width:700px">`;
     html += `<div style="background:var(--primary);color:white;padding:10px;text-align:center;font-size:12px;font-weight:700">Time</div>`;
@@ -291,14 +302,20 @@
       if (ti === TIMES.length - 1) return;
       html += `<div style="background:#f7f9fc;padding:8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">${time}</div>`;
       DAYS.forEach(day => {
-        const dayScheds = schedules.filter(s => s.day === day && s.startTime <= time && s.endTime > time);
+        // Strip seconds from DB times (e.g. "07:30:00" → "07:30") for comparison
+        const dayScheds = data.filter(s => {
+          const start = (s.start_time || '').substring(0, 5);
+          const end   = (s.end_time   || '').substring(0, 5);
+          return s.day === day && start <= time && end > time;
+        });
         html += `<div style="background:white;padding:2px;min-height:44px">`;
         dayScheds.forEach(s => {
-          if (s.startTime === time) {
-            html += `<div class="sched-block ${colorMap[s.subjectCode]}" title="${s.subjectTitle}\n${s.facultyName}\n${s.room}" onclick="showSchedDetail(${s.id})">
-              <div>${s.subjectCode}</div>
+          const start = (s.start_time || '').substring(0, 5);
+          if (start === time) {
+            html += `<div class="sched-block ${colorMap[s.subject_code]}" title="${s.subject_title}\n${s.faculty_name}\n${s.room_number}" onclick="showSchedDetail('${s.id}')">
+              <div>${s.subject_code}</div>
               <div style="font-weight:400;font-size:10px">${s.section}</div>
-              <div style="font-weight:400;font-size:10px">${s.room}</div>
+              <div style="font-weight:400;font-size:10px">${s.room_number}</div>
             </div>`;
           }
         });
@@ -310,124 +327,116 @@
   }
 
   function showSchedDetail(id) {
-    const s = DB.schedules.find(x => x.id === id);
+    const s = schedules.find(x => String(x.id) === String(id));
     if (!s) return;
-    alert(`Subject: ${s.subjectCode} – ${s.subjectTitle}\nFaculty: ${s.facultyName}\nSection: ${s.section}\nRoom: ${s.room}\nDay: ${s.day} ${s.startTime}–${s.endTime}\nType: ${s.type}\nStudents: ${s.students}`);
+    const start = (s.start_time || '').substring(0, 5);
+    const end   = (s.end_time   || '').substring(0, 5);
+    alert(`Subject: ${s.subject_code} – ${s.subject_title}\nFaculty: ${s.faculty_name}\nSection: ${s.section}\nRoom: ${s.room_number}\nDay: ${s.day} ${start}–${end}\nStudents: ${s.students}`);
   }
 
+  // ── List ──
   function renderList() {
     const search = document.getElementById('sched-search').value.toLowerCase();
-    const day = document.getElementById('sched-day-filter').value;
-    let data = DB.schedules.filter(s =>
-      (!search || s.subjectCode.toLowerCase().includes(search) || s.facultyName.toLowerCase().includes(search) || s.section.toLowerCase().includes(search)) &&
+    const day    = document.getElementById('sched-day-filter').value;
+    let data = schedules.filter(s =>
+      (!search || s.subject_code.toLowerCase().includes(search) || s.faculty_name.toLowerCase().includes(search) || s.section.toLowerCase().includes(search)) &&
       (!day || s.day === day)
     );
-    if (role === 'faculty') data = data.filter(s => s.facultyId === Auth.currentUser.id);
+    if (role === 'faculty') data = data.filter(s => String(s.faculty_id) === String(Auth.currentUser.id));
     document.getElementById('sched-tbody').innerHTML = data.map(s => `
       <tr>
-        <td><div class="fw-bold">${s.subjectCode}</div><div class="text-muted" style="font-size:11px">${s.subjectTitle}</div></td>
-        <td style="font-size:12px">${s.facultyName}</td>
+        <td><div class="fw-bold">${s.subject_code}</div><div class="text-muted" style="font-size:11px">${s.subject_title}</div></td>
+        <td style="font-size:12px">${s.faculty_name}</td>
         <td>${s.section}</td>
-        <td><span class="badge badge-info">${s.room}</span></td>
+        <td><span class="badge badge-info">${s.room_number}</span></td>
         <td>${s.day}</td>
-        <td style="font-size:12px">${s.startTime} – ${s.endTime}</td>
+        <td style="font-size:12px">${(s.start_time||'').substring(0,5)} – ${(s.end_time||'').substring(0,5)}</td>
         <td><span class="badge badge-${s.type==='Lab'?'warning':'primary'}">${s.type}</span></td>
         <td style="text-align:center">${s.students}</td>
         <td>
-          ${role !== 'faculty' ? `<div class="d-flex gap-2">
-            <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id})">Delete</button>
-          </div>` : '–'}
+          ${role !== 'faculty' ? `<button class="btn btn-sm btn-outline" onclick="editSchedule(${s.id})">Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteSchedule(${s.id})">Delete</button>` : '–'}
         </td>
       </tr>`).join('') || '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:20px">No schedules found.</td></tr>';
   }
 
+  // ── Conflicts ──
   function renderConflicts() {
     const conflicts = [];
-    DB.schedules.forEach((s1, i) => {
-      DB.schedules.slice(i + 1).forEach(s2 => {
+    schedules.forEach((s1, i) => {
+      schedules.slice(i + 1).forEach(s2 => {
         if (s1.day !== s2.day) return;
-        const overlap = s1.startTime < s2.endTime && s1.endTime > s2.startTime;
+        const overlap = s1.start_time < s2.end_time && s1.end_time > s2.start_time;
         if (!overlap) return;
-        if (s1.facultyId === s2.facultyId) conflicts.push({ type: 'Faculty', detail: `${s1.facultyName} has overlapping classes`, s1, s2 });
-        if (s1.roomId === s2.roomId) conflicts.push({ type: 'Room', detail: `${s1.room} is double-booked`, s1, s2 });
-        if (s1.section === s2.section) conflicts.push({ type: 'Section', detail: `Section ${s1.section} has overlapping classes`, s1, s2 });
+        if (String(s1.faculty_id) === String(s2.faculty_id)) conflicts.push({ type:'Faculty', detail:`${s1.faculty_name} has overlapping classes`, s1, s2 });
+        if (String(s1.room_id)    === String(s2.room_id))    conflicts.push({ type:'Room',    detail:`${s1.room_number} is double-booked`, s1, s2 });
+        if (s1.section === s2.section)                        conflicts.push({ type:'Section', detail:`Section ${s1.section} has overlapping classes`, s1, s2 });
       });
     });
-
     document.getElementById('conflicts-content').innerHTML = `
       <div class="d-flex justify-between align-center mb-2">
         <h3 style="font-size:15px;font-weight:700">Conflict Detection Report</h3>
-        <span class="badge badge-${conflicts.length ? 'danger' : 'success'}">${conflicts.length} conflict${conflicts.length !== 1 ? 's' : ''} found</span>
+        <span class="badge badge-${conflicts.length?'danger':'success'}">${conflicts.length} conflict${conflicts.length!==1?'s':''} found</span>
       </div>
       ${conflicts.length ? conflicts.map(c => `
         <div class="alert alert-danger">
-          <div>
-            <div class="fw-bold">⚠ ${c.type} Conflict: ${c.detail}</div>
-            <div style="font-size:12px;margin-top:4px">
-              <strong>${c.s1.subjectCode}</strong> (${c.s1.section}, ${c.s1.startTime}–${c.s1.endTime}) vs
-              <strong>${c.s2.subjectCode}</strong> (${c.s2.section}, ${c.s2.startTime}–${c.s2.endTime}) — ${c.s1.day}
-            </div>
+          <div class="fw-bold">⚠ ${c.type} Conflict: ${c.detail}</div>
+          <div style="font-size:12px;margin-top:4px">
+            <strong>${c.s1.subject_code}</strong> (${c.s1.section}, ${(c.s1.start_time||'').substring(0,5)}–${(c.s1.end_time||'').substring(0,5)}) vs
+            <strong>${c.s2.subject_code}</strong> (${c.s2.section}, ${(c.s2.start_time||'').substring(0,5)}–${(c.s2.end_time||'').substring(0,5)}) — ${c.s1.day}
           </div>
         </div>`).join('') :
-        '<div class="alert alert-success">✓ No scheduling conflicts detected. All schedules are clear.</div>'}`;
+        '<div class="alert alert-success">✓ No scheduling conflicts detected.</div>'}`;
   }
 
-  function renderRequests() {
-    let requests = DB.changeRequests;
-    if (role === 'faculty') requests = requests.filter(r => r.facultyId === Auth.currentUser.id);
+  // ── Change Requests ──
+  async function renderRequests() {
+    const res    = await fetch(BACKEND + 'change_requests.php?action=get_all');
+    const result = await res.json();
+    let requests = result.success ? result.data : [];
+    if (role === 'faculty') requests = requests.filter(r => String(r.faculty_id) === String(Auth.currentUser.id));
     document.getElementById('requests-list').innerHTML = requests.length ? `
       <div class="table-wrapper">
         <table>
-          <thead><tr><th>Faculty</th><th>Type</th><th>Reason</th><th>Details</th><th>Date</th><th>Status</th>${role !== 'faculty' ? '<th>Actions</th>' : ''}</tr></thead>
+          <thead><tr><th>Faculty</th><th>Schedule</th><th>Reason</th><th>Details</th><th>Status</th>${role!=='faculty'?'<th>Actions</th>':''}</tr></thead>
           <tbody>
             ${requests.map(r => `<tr>
-              <td>${r.facultyName}</td>
-              <td><span class="badge badge-primary">${r.type}</span></td>
+              <td>${r.faculty_name}</td>
+              <td style="font-size:12px">${r.subject_code} – ${r.section}<br>${r.day} ${(r.start_time||'').substring(0,5)}</td>
               <td style="font-size:12px">${r.reason}</td>
-              <td style="font-size:12px">${r.requestedDay ? `Move to ${r.requestedDay} ${r.requestedTime}` : r.requestedRoom ? `Room: ${r.requestedRoom}` : '–'}</td>
-              <td style="font-size:12px">${r.date}</td>
+              <td style="font-size:12px">${r.new_day ? `Move to ${r.new_day} ${r.new_time}` : r.new_room_id ? `Room change` : '–'}</td>
               <td><span class="badge badge-${r.status==='pending'?'warning':r.status==='approved'?'success':'danger'}">${r.status}</span></td>
-              ${role !== 'faculty' ? `<td>
-                ${r.status === 'pending' ? `
-                  <button class="btn btn-sm btn-success" onclick="approveRequest(${r.id})">Approve</button>
-                  <button class="btn btn-sm btn-danger" onclick="rejectRequest(${r.id})">Reject</button>` : '–'}
-              </td>` : ''}
+              ${role!=='faculty'?`<td>
+                ${r.status==='pending'?`
+                  <button class="btn btn-sm btn-success" onclick="handleRequest(${r.id},'approved')">Approve</button>
+                  <button class="btn btn-sm btn-danger"  onclick="handleRequest(${r.id},'rejected')">Reject</button>` : '–'}
+              </td>`:''}
             </tr>`).join('')}
           </tbody>
         </table>
-      </div>` : '<div class="empty-state"><p>No change requests found.</p></div>';
+      </div>` : '<div style="text-align:center;padding:40px;color:var(--text-muted)">No change requests found.</div>';
   }
 
-  function approveRequest(id) {
-    const r = DB.changeRequests.find(x => x.id === id);
-    r.status = 'approved';
-    UI.showToast('Request approved.');
-    renderRequests();
+  async function handleRequest(id, status) {
+    const form = new FormData();
+    form.append('action', status === 'approved' ? 'approve' : 'reject');
+    form.append('id', id);
+    const res    = await fetch(BACKEND + 'change_requests.php', { method:'POST', body:form });
+    const result = await res.json();
+    if (result.success) { UI.showToast(`Request ${status}.`); renderRequests(); }
+    else UI.showToast(result.message || 'Failed.', 'error');
   }
 
-  function rejectRequest(id) {
-    const r = DB.changeRequests.find(x => x.id === id);
-    r.status = 'rejected';
-    UI.showToast('Request rejected.', 'warning');
-    renderRequests();
-  }
-
+  // ── Add Schedule ──
   function openAddSchedule() {
-    // Populate dropdowns fresh each time so newly added data appears
-    const subjSel = document.getElementById('sf-subject');
-    subjSel.innerHTML = '<option value="">-- Select Subject --</option>' +
-      DB.subjects.map(s => `<option value="${s.id}">${s.code} – ${s.title}</option>`).join('');
-
-    const facSel = document.getElementById('sf-faculty');
-    facSel.innerHTML = '<option value="">-- Select Faculty --</option>' +
-      DB.users.filter(u => u.role === 'faculty' && u.status === 'active')
-        .map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-
-    const roomSel = document.getElementById('sf-room');
-    roomSel.innerHTML = '<option value="">-- Select Room --</option>' +
-      DB.rooms.filter(r => r.status === 'available')
-        .map(r => `<option value="${r.id}">${r.number} (${r.type})</option>`).join('');
-
+    editingSchedId = null;
+    document.getElementById('sched-modal-title').textContent = 'Add Schedule';
+    document.getElementById('sf-subject').innerHTML = '<option value="">-- Select Subject --</option>' +
+      subjects.map(s => `<option value="${s.id}">${s.code} – ${s.title}</option>`).join('');
+    document.getElementById('sf-faculty').innerHTML = '<option value="">-- Select Faculty --</option>' +
+      faculties.filter(f => f.status === 'active').map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+    document.getElementById('sf-room').innerHTML = '<option value="">-- Select Room --</option>' +
+      rooms.filter(r => r.status === 'available').map(r => `<option value="${r.id}">${r.number} (${r.type})</option>`).join('');
     document.getElementById('sf-subject-title').value = '';
     document.getElementById('sf-section').value = '';
     document.getElementById('sf-start').value = '07:30';
@@ -438,104 +447,165 @@
     UI.openModal('sched-modal');
   }
 
-  // Auto-fill subject title when subject is selected
-  document.addEventListener('change', function(e) {
-    if (e.target.id === 'sf-subject') {
-      const subj = DB.subjects.find(s => s.id == e.target.value);
-      document.getElementById('sf-subject-title').value = subj ? subj.title : '';
-    }
-  });
-
-  function checkConflict(facultyId, roomId, day, start, end, excludeId = null) {
-    return DB.schedules.filter(s => s.id !== excludeId).find(s => {
-      if (s.day !== day) return false;
-      return start < s.endTime && end > s.startTime && (s.facultyId == facultyId || s.roomId == roomId);
-    });
+  function onSubjectChange() {
+    const subj = subjects.find(s => String(s.id) === String(document.getElementById('sf-subject').value));
+    document.getElementById('sf-subject-title').value = subj ? subj.title : '';
   }
 
-  function saveSchedule() {
-    const sid = document.getElementById('sf-subject').value;
-    const fid = document.getElementById('sf-faculty').value;
-    const section = document.getElementById('sf-section').value.trim();
-    const rid = document.getElementById('sf-room').value;
-    const day = document.getElementById('sf-day').value;
-    const start = document.getElementById('sf-start').value;
-    const end = document.getElementById('sf-end').value;
+  // ── Algorithm: Greedy FFD Faculty Suggestion ──
+  async function suggestFaculty() {
+    const res    = await fetch(BACKEND + 'schedules.php', { method:'POST', body: (() => { const f = new FormData(); f.append('action','suggest_faculty'); return f; })() });
+    const result = await res.json();
+    if (!result.success || !result.data.length) { UI.showToast('No available faculty found.', 'error'); return; }
+    const best = result.data[0]; // FFD picks faculty with most remaining units
+    const sel  = document.getElementById('sf-faculty');
+    Array.from(sel.options).forEach(o => { if (String(o.value) === String(best.id)) o.selected = true; });
+    UI.showToast(`⚡ Greedy FFD suggests: ${best.name} (${best.remaining_units} units remaining)`);
+  }
+
+  // ── Algorithm: Dijkstra Room Suggestion ──
+  async function suggestRoom() {
+    const students = document.getElementById('sf-students').value || 30;
+    const fd = new FormData(); fd.append('action','suggest_room'); fd.append('students', students);
+    const res    = await fetch(BACKEND + 'schedules.php', { method:'POST', body: fd });
+    const result = await res.json();
+    if (!result.success) { UI.showToast(result.message || 'No suitable room found.', 'error'); return; }
+    const room = result.room;
+    const sel  = document.getElementById('sf-room');
+    Array.from(sel.options).forEach(o => { if (String(o.value) === String(room.id)) o.selected = true; });
+    UI.showToast(`⚡ Dijkstra suggests: ${room.number} (Cap: ${room.capacity}, waste: ${room.capacity - students} seats)`);
+  }
+
+  async function saveSchedule() {
+    const subject_id = document.getElementById('sf-subject').value;
+    const faculty_id = document.getElementById('sf-faculty').value;
+    const section    = document.getElementById('sf-section').value.trim();
+    const room_id    = document.getElementById('sf-room').value;
+    const day        = document.getElementById('sf-day').value;
+    const start_time = document.getElementById('sf-start').value;
+    const end_time   = document.getElementById('sf-end').value;
     document.getElementById('sched-error').style.display = 'none';
     document.getElementById('sched-conflict-alert').style.display = 'none';
-    if (!sid || !fid || !section || !rid || !start || !end) { document.getElementById('sched-error').style.display = 'flex'; return; }
-    if (start >= end) { document.getElementById('sched-error').textContent = 'End time must be after start time.'; document.getElementById('sched-error').style.display = 'flex'; return; }
-    const conflict = checkConflict(fid, rid, day, start, end);
-    if (conflict) {
-      const ca = document.getElementById('sched-conflict-alert');
-      ca.style.display = 'flex';
-      ca.innerHTML = `⚠ Conflict with <strong>${conflict.subjectCode}</strong> (${conflict.facultyName}, ${conflict.room}) on ${conflict.day} ${conflict.startTime}–${conflict.endTime}.`;
-      return;
+
+    if (!subject_id || !faculty_id || !section || !room_id || !start_time || !end_time) {
+      document.getElementById('sched-error').style.display = 'flex'; return;
     }
-    const subj = DB.subjects.find(s => s.id == sid);
-    const faculty = DB.users.find(u => u.id == fid);
-    const room = DB.rooms.find(r => r.id == rid);
-    DB.schedules.push({
-      id: DB.nextId('schedules'),
-      subjectId: subj.id, subjectCode: subj.code, subjectTitle: subj.title,
-      facultyId: faculty.id, facultyName: faculty.name,
-      roomId: room.id, room: room.number,
-      section, day, startTime: start, endTime: end,
-      type: document.getElementById('sf-type').value,
-      semester: '1st', schoolYear: '2025-2026',
-      students: parseInt(document.getElementById('sf-students').value) || 30
-    });
-    Storage.save();
-    UI.closeModal('sched-modal');
-    UI.showToast('Schedule added.');
-    renderVisual();
+    if (start_time >= end_time) {
+      document.getElementById('sched-error').textContent = 'End time must be after start time.';
+      document.getElementById('sched-error').style.display = 'flex'; return;
+    }
+
+    const form = new FormData();
+    form.append('action',     editingSchedId ? 'edit' : 'add');
+    if (editingSchedId) form.append('id', editingSchedId);
+    form.append('subject_id', subject_id);
+    form.append('faculty_id', faculty_id);
+    form.append('room_id',    room_id);
+    form.append('section',    section);
+    form.append('day',        day);
+    form.append('start_time', start_time);
+    form.append('end_time',   end_time);
+    form.append('type',       document.getElementById('sf-type').value);
+    form.append('students',   document.getElementById('sf-students').value);
+    form.append('semester',   '1st');
+    form.append('school_year','2025-2026');
+
+    const res    = await fetch(BACKEND + 'schedules.php', { method:'POST', body:form });
+    const result = await res.json();
+
+    if (result.success) {
+      UI.showToast(editingSchedId ? 'Schedule updated.' : 'Schedule added.');
+      editingSchedId = null;
+      UI.closeModal('sched-modal');
+      await loadAll();
+      renderVisual();
+    } else {
+      const ca = document.getElementById('sched-conflict-alert');
+      if (result.conflicts && result.conflicts.length) {
+        ca.textContent = result.conflicts.join(' | ');
+      } else {
+        ca.textContent = result.message || 'Failed to save schedule. Please check your inputs.';
+      }
+      ca.style.display = 'flex';
+    }
   }
 
-  function deleteSchedule(id) {
-    UI.confirm('Delete this schedule?', () => {
-      DB.schedules = DB.schedules.filter(s => s.id !== id);
-      Storage.save();
-      UI.showToast('Schedule deleted.', 'warning');
-      renderList();
+  function editSchedule(id) {
+    const s = schedules.find(x => String(x.id) === String(id));
+    if (!s) return;
+    editingSchedId = id;
+    document.getElementById('sched-modal-title').textContent = 'Edit Schedule';
+    // Pre-fill all fields
+    const subjectSel = document.getElementById('sf-subject');
+    Array.from(subjectSel.options).forEach(o => { if (String(o.value) === String(s.subject_id)) o.selected = true; });
+    subjectSel.dispatchEvent(new Event('change'));
+    const facSel = document.getElementById('sf-faculty');
+    Array.from(facSel.options).forEach(o => { if (String(o.value) === String(s.faculty_id)) o.selected = true; });
+    const roomSel = document.getElementById('sf-room');
+    Array.from(roomSel.options).forEach(o => { if (String(o.value) === String(s.room_id)) o.selected = true; });
+    document.getElementById('sf-section').value  = s.section;
+    document.getElementById('sf-day').value      = s.day;
+    document.getElementById('sf-start').value    = (s.start_time||'').substring(0,5);
+    document.getElementById('sf-end').value      = (s.end_time||'').substring(0,5);
+    document.getElementById('sf-students').value = s.students;
+    document.getElementById('sf-type').value     = s.type;
+    document.getElementById('sched-conflict-alert').style.display = 'none';
+    UI.openModal('sched-modal');
+  }
+
+  async function deleteSchedule(id) {
+    UI.confirm('Delete this schedule?', async () => {
+      const form = new FormData();
+      form.append('action', 'delete');
+      form.append('id', id);
+      const res    = await fetch(BACKEND + 'schedules.php', { method:'POST', body:form });
+      const result = await res.json();
+      if (result.success) {
+        UI.showToast('Schedule deleted.', 'warning');
+        await loadAll();
+        renderList();
+      } else {
+        UI.showToast(result.message, 'error');
+      }
     });
   }
 
+  // ── Change Request ──
   function openRequestModal() {
-    const sel = document.getElementById('req-schedule');
     const source = role === 'faculty'
-      ? DB.schedules.filter(s => s.facultyId === Auth.currentUser.id)
-      : DB.schedules;
-    sel.innerHTML = '<option value="">-- Select Schedule --</option>' +
-      source.map(s => `<option value="${s.id}">${s.subjectCode} – ${s.section} (${s.day} ${s.startTime})</option>`).join('');
-    document.getElementById('req-reason').value = '';
+      ? schedules.filter(s => String(s.faculty_id) === String(Auth.currentUser.id))
+      : schedules;
+    document.getElementById('req-schedule').innerHTML = '<option value="">-- Select Schedule --</option>' +
+      source.map(s => `<option value="${s.id}">${s.subject_code} – ${s.section} (${s.day} ${(s.start_time||'').substring(0,5)})</option>`).join('');
+    document.getElementById('req-reason').value  = '';
     document.getElementById('req-details').value = '';
     UI.openModal('request-modal');
   }
 
-  function submitRequest() {
-    const schedId = document.getElementById('req-schedule').value;
-    const reason = document.getElementById('req-reason').value.trim();
-    if (!schedId || !reason) { UI.showToast('Please fill in required fields.', 'error'); return; }
-    const sched = DB.schedules.find(s => s.id == schedId);
-    Storage.save();
-    DB.changeRequests.push({
-      id: DB.nextId('changeRequests'),
-      facultyId: Auth.currentUser.id,
-      facultyName: Auth.currentUser.name,
-      scheduleId: parseInt(schedId),
-      type: document.getElementById('req-type').value,
-      reason,
-      requestedDetails: document.getElementById('req-details').value,
-      status: 'pending',
-      date: new Date().toISOString().split('T')[0]
-    });
-    UI.closeModal('request-modal');
-    UI.showToast('Change request submitted.');
-    renderRequests();
+  async function submitRequest() {
+    const schedule_id = document.getElementById('req-schedule').value;
+    const reason      = document.getElementById('req-reason').value.trim();
+    if (!schedule_id || !reason) { UI.showToast('Please fill in required fields.', 'error'); return; }
+
+    const form = new FormData();
+    form.append('action',      'submit');
+    form.append('faculty_id',  Auth.currentUser.id);
+    form.append('schedule_id', schedule_id);
+    form.append('reason',      reason);
+    form.append('new_time',    document.getElementById('req-details').value);
+
+    const res    = await fetch(BACKEND + 'change_requests.php', { method:'POST', body:form });
+    const result = await res.json();
+    if (result.success) {
+      UI.closeModal('request-modal');
+      UI.showToast('Change request submitted.');
+      renderRequests();
+    } else {
+      UI.showToast(result.message || 'Failed to submit.', 'error');
+    }
   }
 
-  document.getElementById('vis-filter').addEventListener('change', updateVisFilter);
-  updateVisFilter();
+  loadAll();
 </script>
 </body>
 </html>

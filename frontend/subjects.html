@@ -191,40 +191,58 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="../backend/storage.js"></script>
-<script src="../backend/auth.js"></script>
+
+<script src="js/auth.js"></script>
 <script>
   Auth.requireAuth(['admin','registrar']);
   UI.renderSidebar('subjects');
   UI.renderTopbar('Subject Management', 'Manage academic subjects');
 
+  const BACKEND = '../backend/';
   let editingId = null;
+  let departments = [], programs = [], subjects = [];
+
+  // Load all data from PHP
+  async function loadAll() {
+    const [dRes, pRes, sRes] = await Promise.all([
+      fetch(BACKEND + 'subjects.php?action=get_departments'),
+      fetch(BACKEND + 'subjects.php?action=get_programs'),
+      fetch(BACKEND + 'subjects.php?action=get_subjects')
+    ]);
+    const dData = await dRes.json();
+    const pData = await pRes.json();
+    const sData = await sRes.json();
+    if (dData.success) departments = dData.data;
+    if (pData.success) programs    = pData.data;
+    if (sData.success) subjects    = sData.data;
+    refreshDeptFilter();
+    renderTable();
+  }
 
   // ---- Dept filter dropdown ----
   function refreshDeptFilter() {
     const sel = document.getElementById('filter-dept');
     const cur = sel.value;
     sel.innerHTML = '<option value="">All Departments</option>' +
-      DB.departments.map(d => `<option value="${d.code}" ${d.code===cur?'selected':''}>${d.code} – ${d.name}</option>`).join('');
+      departments.map(d => `<option value="${d.code}" ${d.code===cur?'selected':''}>${d.code} – ${d.name}</option>`).join('');
   }
 
   // ---- Populate dept select in subject modal ----
   function populateDeptSelect(selId, currentVal = '') {
     const sel = document.getElementById(selId);
     sel.innerHTML = '<option value="">-- Select Department --</option>' +
-      DB.departments.map(d => `<option value="${d.code}" ${d.code===currentVal?'selected':''}>${d.code} – ${d.name}</option>`).join('');
+      departments.map(d => `<option value="${d.code}" ${d.code===currentVal?'selected':''}>${d.code} – ${d.name}</option>`).join('');
   }
 
   // ---- Populate program select filtered by dept ----
   function populateProgramSelect(progSelId, deptSelId, currentVal = '') {
     const deptCode = document.getElementById(deptSelId).value;
-    const dept = DB.departments.find(d => d.code === deptCode);
-    const programs = dept ? DB.programs.filter(p => p.departmentId === dept.id) : [];
+    const dept = departments.find(d => d.code === deptCode);
+    const filteredPrograms = dept ? programs.filter(p => String(p.department_id) === String(dept.id)) : [];
     const sel = document.getElementById(progSelId);
     sel.innerHTML = '<option value="">-- Select Program --</option>' +
-      programs.map(p => `<option value="${p.code}" ${p.code===currentVal?'selected':''}>${p.code} – ${p.name}</option>`).join('');
-    if (!programs.length && deptCode) {
+      filteredPrograms.map(p => `<option value="${p.code}" ${p.code===currentVal?'selected':''}>${p.code} – ${p.name}</option>`).join('');
+    if (!filteredPrograms.length && deptCode) {
       sel.innerHTML += '<option disabled>No programs for this department</option>';
     }
   }
@@ -235,7 +253,7 @@
     const dept   = document.getElementById('filter-dept').value;
     const sem    = document.getElementById('filter-sem').value;
     const type   = document.getElementById('filter-type').value;
-    const data   = DB.subjects.filter(s =>
+    const data   = subjects.filter(s =>
       (!search || s.code.toLowerCase().includes(search) || s.title.toLowerCase().includes(search)) &&
       (!dept || s.department === dept) &&
       (!sem  || s.semester === sem) &&
@@ -263,7 +281,7 @@
   }
 
   function openAddSubject() {
-    if (!DB.departments.length) {
+    if (!departments.length) {
       UI.showToast('Add at least one department first.', 'warning');
       openDeptModal(); return;
     }
@@ -282,7 +300,7 @@
 
   function editSubject(id) {
     editingId = id;
-    const s = DB.subjects.find(x => x.id === id);
+    const s = subjects.find(x => String(x.id) === String(id));
     document.getElementById('modal-title').textContent = 'Edit Subject';
     document.getElementById('f-code').value = s.code;
     document.getElementById('f-title').value = s.title;
@@ -298,45 +316,54 @@
     UI.openModal('subject-modal');
   }
 
-  function saveSubject() {
+  async function saveSubject() {
     const code  = document.getElementById('f-code').value.trim();
     const title = document.getElementById('f-title').value.trim();
     const units = parseInt(document.getElementById('f-units').value);
-    const dept  = document.getElementById('f-dept').value;
     const prog  = document.getElementById('f-program').value;
-    if (!code || !title || !units || !dept || !prog) {
+    if (!code || !title || !units || !prog) {
       document.getElementById('form-error').style.display = 'flex'; return;
     }
     document.getElementById('form-error').style.display = 'none';
-    const data = {
-      code, title, units,
-      lec: parseInt(document.getElementById('f-lec').value) || 0,
-      lab: parseInt(document.getElementById('f-lab').value) || 0,
-      department: dept,
-      program: prog,
-      yearLevel: parseInt(document.getElementById('f-year').value),
-      semester: document.getElementById('f-sem').value,
-      type: document.getElementById('f-type').value,
-    };
-    if (editingId) {
-      const idx = DB.subjects.findIndex(s => s.id === editingId);
-      DB.subjects[idx] = { ...DB.subjects[idx], ...data };
-      UI.showToast('Subject updated.');
+
+    // Find program_id from selected program code
+    const selectedProg = programs.find(p => p.code === prog);
+    const formData = new FormData();
+    formData.append('action',     editingId ? 'edit_subject' : 'add_subject');
+    formData.append('code',       code);
+    formData.append('title',      title);
+    formData.append('units',      units);
+    formData.append('type',       document.getElementById('f-type').value);
+    formData.append('program_id', selectedProg ? selectedProg.id : '');
+    formData.append('year_level', document.getElementById('f-year').value);
+    formData.append('semester',   document.getElementById('f-sem').value);
+    if (editingId) formData.append('id', editingId);
+
+    const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
+    const result = await res.json();
+    if (result.success) {
+      UI.showToast(editingId ? 'Subject updated.' : 'Subject added.');
+      UI.closeModal('subject-modal');
+      await loadAll();
     } else {
-      Storage.save();
-    DB.subjects.push({ id: DB.nextId('subjects'), ...data });
-      UI.showToast('Subject added.');
+      document.getElementById('form-error').textContent = result.message;
+      document.getElementById('form-error').style.display = 'flex';
     }
-    UI.closeModal('subject-modal');
-    renderTable();
   }
 
-  function deleteSubject(id) {
-    UI.confirm('Delete this subject?', () => {
-      Storage.save();
-      DB.subjects = DB.subjects.filter(s => s.id !== id);
-      UI.showToast('Subject deleted.', 'warning');
-      renderTable();
+  async function deleteSubject(id) {
+    UI.confirm('Delete this subject?', async () => {
+      const formData = new FormData();
+      formData.append('action', 'delete_subject');
+      formData.append('id', id);
+      const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (result.success) {
+        UI.showToast('Subject deleted.', 'warning');
+        await loadAll();
+      } else {
+        UI.showToast(result.message, 'error');
+      }
     });
   }
 
@@ -355,9 +382,9 @@
   }
 
   function renderDeptTable() {
-    document.getElementById('dept-tbody').innerHTML = DB.departments.length
-      ? DB.departments.map(d => {
-          const progCount = DB.programs.filter(p => p.departmentId === d.id).length;
+    document.getElementById('dept-tbody').innerHTML = departments.length
+      ? departments.map(d => {
+          const progCount = programs.filter(p => String(p.department_id) === String(d.id)).length;
           return `<tr>
             <td><span class="badge badge-primary">${d.code}</span></td>
             <td class="fw-bold">${d.name}</td>
@@ -369,9 +396,9 @@
   }
 
   function renderProgTable() {
-    document.getElementById('prog-tbody').innerHTML = DB.programs.length
-      ? DB.programs.map(p => {
-          const dept = DB.departments.find(d => d.id === p.departmentId);
+    document.getElementById('prog-tbody').innerHTML = programs.length
+      ? programs.map(p => {
+          const dept = departments.find(d => String(d.id) === String(p.department_id));
           return `<tr>
             <td><span class="badge badge-info">${p.code}</span></td>
             <td class="fw-bold">${p.name}</td>
@@ -385,70 +412,99 @@
   function refreshNewProgDeptSelect() {
     const sel = document.getElementById('new-prog-dept');
     sel.innerHTML = '<option value="">-- Department --</option>' +
-      DB.departments.map(d => `<option value="${d.id}">${d.code} – ${d.name}</option>`).join('');
+      departments.map(d => `<option value="${d.id}">${d.code} – ${d.name}</option>`).join('');
   }
 
-  function addDepartment() {
+  async function addDepartment() {
     const code = document.getElementById('new-dept-code').value.trim().toUpperCase();
     const name = document.getElementById('new-dept-name').value.trim();
     document.getElementById('dept-error').style.display = 'none';
     if (!code || !name) { document.getElementById('dept-error').style.display = 'flex'; return; }
-    if (DB.departments.find(d => d.code === code)) {
+    if (departments.find(d => d.code === code)) {
       document.getElementById('dept-error').textContent = 'Department code already exists.';
       document.getElementById('dept-error').style.display = 'flex'; return;
     }
-    Storage.save();
-    DB.departments.push({ id: DB.nextId('departments'), code, name });
-    document.getElementById('new-dept-code').value = '';
-    document.getElementById('new-dept-name').value = '';
-    renderDeptTable();
-    refreshNewProgDeptSelect();
-    refreshDeptFilter();
-    UI.showToast('Department added.');
-  }
-
-  function deleteDepartment(id) {
-    const hasPrograms = DB.programs.some(p => p.departmentId === id);
-    if (hasPrograms) { UI.showToast('Remove all programs under this department first.', 'error'); return; }
-    UI.confirm('Delete this department?', () => {
-      Storage.save();
-      DB.departments = DB.departments.filter(d => d.id !== id);
+    const formData = new FormData();
+    formData.append('action', 'add_department');
+    formData.append('code', code);
+    formData.append('name', name);
+    const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
+    const result = await res.json();
+    if (result.success) {
+      document.getElementById('new-dept-code').value = '';
+      document.getElementById('new-dept-name').value = '';
+      await loadAll();
       renderDeptTable();
       refreshNewProgDeptSelect();
       refreshDeptFilter();
-      UI.showToast('Department deleted.', 'warning');
+      UI.showToast('Department added.');
+    } else {
+      document.getElementById('dept-error').textContent = result.message || 'Failed to add department.';
+      document.getElementById('dept-error').style.display = 'flex';
+    }
+  }
+
+  async function deleteDepartment(id) {
+    UI.confirm('Delete this department?', async () => {
+      const formData = new FormData();
+      formData.append('action', 'delete_department');
+      formData.append('id', id);
+      const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (result.success) {
+        await loadAll();
+        renderDeptTable();
+        refreshNewProgDeptSelect();
+        UI.showToast('Department deleted.', 'warning');
+      } else {
+        UI.showToast(result.message, 'error');
+      }
     });
   }
 
-  function addProgram() {
+  async function addProgram() {
     const code   = document.getElementById('new-prog-code').value.trim().toUpperCase();
     const name   = document.getElementById('new-prog-name').value.trim();
     const deptId = parseInt(document.getElementById('new-prog-dept').value);
     document.getElementById('prog-error').style.display = 'none';
     if (!code || !name || !deptId) { document.getElementById('prog-error').style.display = 'flex'; return; }
-    if (DB.programs.find(p => p.code === code)) {
-      document.getElementById('prog-error').textContent = 'Program code already exists.';
-      document.getElementById('prog-error').style.display = 'flex'; return;
+    const formData = new FormData();
+    formData.append('action', 'add_program');
+    formData.append('code', code);
+    formData.append('name', name);
+    formData.append('department_id', deptId);
+    const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
+    const result = await res.json();
+    if (result.success) {
+      document.getElementById('new-prog-code').value = '';
+      document.getElementById('new-prog-name').value = '';
+      await loadAll();
+      renderProgTable();
+      UI.showToast('Program added.');
+    } else {
+      document.getElementById('prog-error').textContent = result.message;
+      document.getElementById('prog-error').style.display = 'flex';
     }
-    Storage.save();
-    DB.programs.push({ id: DB.nextId('programs'), code, name, departmentId: deptId });
-    document.getElementById('new-prog-code').value = '';
-    document.getElementById('new-prog-name').value = '';
-    renderProgTable();
-    UI.showToast('Program added.');
   }
 
-  function deleteProgram(id) {
-    UI.confirm('Delete this program?', () => {
-      Storage.save();
-      DB.programs = DB.programs.filter(p => p.id !== id);
-      renderProgTable();
-      UI.showToast('Program deleted.', 'warning');
+  async function deleteProgram(id) {
+    UI.confirm('Delete this program?', async () => {
+      const formData = new FormData();
+      formData.append('action', 'delete_program');
+      formData.append('id', id);
+      const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (result.success) {
+        await loadAll();
+        renderProgTable();
+        UI.showToast('Program deleted.', 'warning');
+      } else {
+        UI.showToast(result.message, 'error');
+      }
     });
   }
 
-  refreshDeptFilter();
-  renderTable();
+  loadAll();
 </script>
 </body>
 </html>

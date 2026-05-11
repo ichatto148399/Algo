@@ -97,7 +97,7 @@
           <input type="email" id="uf-email" class="form-control" placeholder="email@school.edu">
         </div>
         <div class="form-group">
-          <label>Password *</label>
+          <label id="uf-password-label">Password *</label>
           <input type="password" id="uf-password" class="form-control" placeholder="Set password">
         </div>
       </div>
@@ -145,26 +145,41 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="../backend/storage.js"></script>
-<script src="../backend/auth.js"></script>
+
+<script src="js/auth.js"></script>
 <script>
+  const BACKEND = '../backend/';
   Auth.requireAuth(['admin']);
   UI.renderSidebar('users');
   UI.renderTopbar('User Management', 'Manage system accounts');
 
+  let users = [];
+
+  // Load users from PHP
+  async function loadUsers() {
+    const form = new FormData();
+    form.append('action', 'get_all');
+    const res    = await fetch(BACKEND + 'users.php', { method: 'POST', body: form });
+    const result = await res.json();
+    if (result.success) {
+      users = result.data;
+      renderUsers();
+      updateCounts();
+    }
+  }
+
   function updateCounts() {
-    document.getElementById('count-total').textContent = DB.users.length;
-    document.getElementById('count-faculty').textContent = DB.users.filter(u=>u.role==='faculty').length;
-    document.getElementById('count-registrar').textContent = DB.users.filter(u=>u.role==='registrar').length;
-    document.getElementById('count-admin').textContent = DB.users.filter(u=>u.role==='admin').length;
+    document.getElementById('count-total').textContent = users.length;
+    document.getElementById('count-faculty').textContent = users.filter(u=>u.role==='faculty').length;
+    document.getElementById('count-registrar').textContent = users.filter(u=>u.role==='registrar').length;
+    document.getElementById('count-admin').textContent = users.filter(u=>u.role==='admin').length;
   }
 
   function renderUsers() {
     const search = document.getElementById('user-search').value.toLowerCase();
     const role = document.getElementById('user-role-filter').value;
     const status = document.getElementById('user-status-filter').value;
-    const data = DB.users.filter(u =>
+    const data = users.filter(u =>
       (!search || u.name.toLowerCase().includes(search) || u.username.toLowerCase().includes(search) || u.email.toLowerCase().includes(search)) &&
       (!role || u.role === role) &&
       (!status || u.status === status)
@@ -186,9 +201,10 @@
         <td><span class="badge badge-${u.status==='active'?'success':'secondary'}">${u.status}</span></td>
         <td>
           <div class="d-flex gap-2">
-            <button class="btn btn-sm btn-outline" onclick="editUser(${u.id})">Edit</button>
-            <button class="btn btn-sm btn-${u.status==='active'?'warning':'success'}" onclick="toggleStatus(${u.id})">${u.status==='active'?'Deactivate':'Activate'}</button>
-            ${u.id !== Auth.currentUser.id ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Delete</button>` : ''}
+            ${String(u.id) !== String(Auth.currentUser.id) ? `<button class="btn btn-sm btn-outline" onclick="editUser(${u.id})">Edit</button>` : ''}
+            ${String(u.id) !== String(Auth.currentUser.id) ? `<button class="btn btn-sm btn-${u.status==='active'?'warning':'success'}" onclick="toggleStatus(${u.id})">${u.status==='active'?'Deactivate':'Activate'}</button>` : ''}
+            ${String(u.id) !== String(Auth.currentUser.id) ? `<button class="btn btn-sm btn-danger" onclick="deleteUser(${u.id})">Delete</button>` : ''}
+            ${String(u.id) === String(Auth.currentUser.id) ? `<span style="font-size:12px;color:var(--text-muted);font-style:italic">Current user</span>` : ''}
           </div>
         </td>
       </tr>`;
@@ -208,6 +224,8 @@
     document.getElementById('uf-maxunits').value = 21;
     document.getElementById('uf-role').value = 'faculty';
     document.getElementById('uf-status').value = 'active';
+    document.getElementById('uf-password-label').textContent = 'Password *';
+    document.getElementById('uf-password').placeholder = 'Set password';
     document.getElementById('user-error').style.display = 'none';
     toggleFacultyFields();
     UI.openModal('user-modal');
@@ -215,32 +233,32 @@
 
   function editUser(id) {
     editingUserId = id;
-    const u = DB.users.find(x => x.id === id);
+    const u = users.find(x => String(x.id) === String(id));
     document.getElementById('user-modal-title').textContent = 'Edit User';
     document.getElementById('uf-name').value = u.name;
     document.getElementById('uf-username').value = u.username;
     document.getElementById('uf-email').value = u.email;
-    document.getElementById('uf-password').value = u.password;
+    document.getElementById('uf-password').value = '';  // never expose password; blank = keep current
     document.getElementById('uf-role').value = u.role;
     document.getElementById('uf-dept').value = u.department || 'BSIT';
-    document.getElementById('uf-empid').value = u.employeeId || '';
-    document.getElementById('uf-maxunits').value = u.maxUnits || 21;
+    document.getElementById('uf-empid').value = u.employee_id || u.employeeId || '';
+    document.getElementById('uf-maxunits').value = u.max_units || 21;
     document.getElementById('uf-status').value = u.status;
+    document.getElementById('uf-password-label').textContent = 'Password (leave blank to keep current)';
+    document.getElementById('uf-password').placeholder = 'Leave blank to keep current';
     document.getElementById('user-error').style.display = 'none';
     toggleFacultyFields();
     UI.openModal('user-modal');
   }
 
-  function saveUser() {
+  async function saveUser() {
     const name = document.getElementById('uf-name').value.trim();
     const username = document.getElementById('uf-username').value.trim();
     const email = document.getElementById('uf-email').value.trim();
     const password = document.getElementById('uf-password').value.trim();
-    if (!name || !username || !email || !password) { document.getElementById('user-error').style.display = 'flex'; return; }
+    if (!name || !username || !email || (!editingUserId && !password)) { document.getElementById('user-error').style.display = 'flex'; return; }
 
-    // Check duplicate username
-    const dupUser = DB.users.find(u => u.username === username && u.id !== editingUserId);
-    if (dupUser) { document.getElementById('user-error').textContent = 'Username already exists.'; document.getElementById('user-error').style.display = 'flex'; return; }
+    // (duplicate check handled by PHP)
 
     const role = document.getElementById('uf-role').value;
     const data = {
@@ -253,40 +271,52 @@
       } : {})
     };
 
-    if (editingUserId) {
-      const idx = DB.users.findIndex(u => u.id === editingUserId);
-      DB.users[idx] = { ...DB.users[idx], ...data };
-      UI.showToast('User updated.');
+    const form = new FormData();
+    const action = editingUserId ? 'edit' : 'add';
+    form.append('action', action);
+    if (editingUserId) form.append('id', editingUserId);
+    Object.keys(data).forEach(k => form.append(k, data[k]));
+
+    const res    = await fetch(BACKEND + 'users.php', { method: 'POST', body: form });
+    const result = await res.json();
+
+    if (result.success) {
+      UI.showToast(editingUserId ? 'User updated.' : 'User added.');
+      UI.closeModal('user-modal');
+      loadUsers();
     } else {
-      DB.users.push({ id: DB.nextId('users'), ...data });
-      Storage.save();
-      UI.showToast('User added.');
+      document.getElementById('user-error').textContent = result.message;
+      document.getElementById('user-error').style.display = 'flex';
     }
-    UI.closeModal('user-modal');
-    renderUsers();
-    updateCounts();
   }
 
-  function toggleStatus(id) {
-    const u = DB.users.find(x => x.id === id);
-    u.status = u.status === 'active' ? 'inactive' : 'active';
-    Storage.save();
-    UI.showToast(`User ${u.status === 'active' ? 'activated' : 'deactivated'}.`);
-    renderUsers();
+  async function toggleStatus(id) {
+    const form = new FormData();
+    form.append('action', 'toggle_status');
+    form.append('id', id);
+    const res    = await fetch(BACKEND + 'users.php', { method: 'POST', body: form });
+    const result = await res.json();
+    if (result.success) {
+      UI.showToast('Status updated.');
+      loadUsers();
+    }
   }
 
   function deleteUser(id) {
-    UI.confirm('Delete this user? This cannot be undone.', () => {
-      DB.users = DB.users.filter(u => u.id !== id);
-      Storage.save();
-      UI.showToast('User deleted.', 'warning');
-      renderUsers();
-      updateCounts();
+    UI.confirm('Delete this user? This cannot be undone.', async () => {
+      const form = new FormData();
+      form.append('action', 'delete');
+      form.append('id', id);
+      const res    = await fetch(BACKEND + 'users.php', { method: 'POST', body: form });
+      const result = await res.json();
+      if (result.success) {
+        UI.showToast('User deleted.', 'warning');
+        loadUsers();
+      }
     });
   }
 
-  updateCounts();
-  renderUsers();
+  loadUsers();
 </script>
 </body>
 </html>

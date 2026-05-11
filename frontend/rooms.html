@@ -42,7 +42,7 @@
               </select>
               <select class="filter-select" id="room-status-filter" onchange="renderRooms()">
                 <option value="">All Status</option>
-                <option>available</option><option>maintenance</option><option>occupied</option>
+                <option value="available">Available</option><option value="unavailable">Unavailable</option>
               </select>
             </div>
             <div class="table-wrapper">
@@ -114,8 +114,7 @@
         <label>Status</label>
         <select id="rf-status" class="form-control">
           <option value="available">Available</option>
-          <option value="maintenance">Under Maintenance</option>
-          <option value="occupied">Occupied</option>
+          <option value="unavailable">Unavailable</option>
         </select>
       </div>
       <div class="form-group">
@@ -132,10 +131,10 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="../backend/storage.js"></script>
-<script src="../backend/auth.js"></script>
+
+<script src="js/auth.js"></script>
 <script>
+  const BACKEND = '../backend/';
   Auth.requireAuth();
   const isReadOnly = Auth.currentUser.role === 'faculty';
   UI.renderSidebar('rooms');
@@ -153,7 +152,7 @@
       // Refresh room select with current rooms
       const sel = document.getElementById('cal-room-select');
       const cur = sel.value;
-      sel.innerHTML = DB.rooms.map(r => `<option value="${r.id}" ${r.id==cur?'selected':''}>${r.number}</option>`).join('');
+      sel.innerHTML = rooms.map(r => `<option value="${r.id}" ${r.id==cur?'selected':''}>${r.number}</option>`).join('');
       renderCalendar();
     }
     if (tab === 'utilization') renderUtilization();
@@ -163,22 +162,23 @@
     const search = document.getElementById('room-search').value.toLowerCase();
     const type = document.getElementById('room-type-filter').value;
     const status = document.getElementById('room-status-filter').value;
-    const data = DB.rooms.filter(r =>
-      (!search || r.number.toLowerCase().includes(search) || r.building.toLowerCase().includes(search)) &&
+    const data = rooms.filter(r =>
+      (!search || r.number.toLowerCase().includes(search) || (r.building||'').toLowerCase().includes(search)) &&
       (!type || r.type === type) &&
       (!status || r.status === status)
     );
     document.getElementById('rooms-tbody').innerHTML = data.map(r => {
-      const used = DB.schedules.filter(s => s.roomId === r.id).length;
+      const used = parseInt(r.times_used) || 0;
       const pct = Math.min(Math.round((used / 10) * 100), 100);
       const color = pct > 80 ? 'red' : pct > 50 ? 'orange' : 'green';
+      const facilitiesList = r.facilities ? (Array.isArray(r.facilities) ? r.facilities : r.facilities.split(',').map(f=>f.trim()).filter(Boolean)) : [];
       return `<tr>
         <td><div class="fw-bold">${r.number}</div></td>
-        <td>${r.building}</td>
+        <td>${r.building || '—'}</td>
         <td><span class="badge badge-primary">${r.type}</span></td>
         <td style="text-align:center">${r.capacity}</td>
-        <td style="font-size:11px">${(r.facilities||[]).join(', ')}</td>
-        <td><span class="badge badge-${r.status==='available'?'success':r.status==='maintenance'?'danger':'warning'}">${r.status}</span></td>
+        <td style="font-size:11px">${facilitiesList.join(', ') || '—'}</td>
+        <td><span class="badge badge-${r.status==='available'?'success':'danger'}">${r.status}</span></td>
         <td style="min-width:120px">
           <div class="progress-bar-wrap"><div class="progress-bar ${color}" style="width:${pct}%"></div></div>
           <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${used} classes scheduled</div>
@@ -194,15 +194,19 @@
     }).join('') || '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:20px">No rooms found.</td></tr>';
   }
 
-  function renderCalendar() {
-    if (!DB.rooms.length) {
+  async function renderCalendar() {
+    if (!rooms.length) {
       document.getElementById('room-calendar-wrap').innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted)">No rooms added yet.</div>';
       return;
     }
-    const rid = parseInt(document.getElementById('cal-room-select').value);
-    const room = DB.rooms.find(r => r.id === rid);
-    const schedules = DB.schedules.filter(s => s.roomId === rid);
+    const rid  = document.getElementById('cal-room-select').value;
+    const room = rooms.find(r => String(r.id) === String(rid));
     document.getElementById('cal-room-info').textContent = room ? `${room.type} · Capacity: ${room.capacity} · ${room.status}` : '';
+
+    // Fetch schedules for this room from backend
+    const res = await fetch(BACKEND + 'schedules.php?action=get_all');
+    const result = await res.json();
+    const roomSchedules = result.success ? result.data.filter(s => String(s.room_id) === String(rid)) : [];
 
     let html = `<div class="sched-table" style="display:grid;grid-template-columns:80px repeat(6,1fr);gap:1px;background:var(--border);border-radius:8px;overflow:hidden">`;
     html += `<div style="background:var(--primary);color:white;padding:10px;text-align:center;font-size:12px;font-weight:700">Time</div>`;
@@ -210,14 +214,17 @@
 
     TIMES.forEach((time, ti) => {
       if (ti === TIMES.length - 1) return;
-      const nextTime = TIMES[ti + 1];
       html += `<div style="background:#f7f9fc;padding:8px;text-align:center;font-size:11px;color:var(--text-muted);font-weight:600">${time}</div>`;
       DAYS.forEach(day => {
-        const sched = schedules.find(s => s.day === day && s.startTime <= time && s.endTime > time);
+        const sched = roomSchedules.find(s => {
+          const start = (s.start_time||'').substring(0,5);
+          const end   = (s.end_time||'').substring(0,5);
+          return s.day === day && start <= time && end > time;
+        });
         if (sched) {
-          const isStart = sched.startTime === time;
+          const isStart = (sched.start_time||'').substring(0,5) === time;
           html += `<div style="background:rgba(42,82,152,0.08);padding:3px;min-height:40px">`;
-          if (isStart) html += `<div class="sched-block color-1" title="${sched.subjectTitle}">${sched.subjectCode}<br><span style="font-weight:400">${sched.section}</span></div>`;
+          if (isStart) html += `<div class="sched-block color-1" title="${sched.subject_title}">${sched.subject_code}<br><span style="font-weight:400">${sched.section}</span></div>`;
           html += `</div>`;
         } else {
           html += `<div style="background:white;padding:3px;min-height:40px"></div>`;
@@ -235,8 +242,8 @@
         <table>
           <thead><tr><th>Room</th><th>Type</th><th>Capacity</th><th>Classes/Week</th><th>Utilization</th><th>Status</th></tr></thead>
           <tbody>
-            ${DB.rooms.map(r => {
-              const used = DB.schedules.filter(s => s.roomId === r.id).length;
+            ${rooms.map(r => {
+              const used = parseInt(r.times_used) || 0;
               const pct = Math.min(Math.round((used / 10) * 100), 100);
               const color = pct > 80 ? 'red' : pct > 50 ? 'orange' : 'green';
               return `<tr>
@@ -250,7 +257,7 @@
                     <span style="font-size:12px;font-weight:600;min-width:35px">${pct}%</span>
                   </div>
                 </td>
-                <td><span class="badge badge-${r.status==='available'?'success':r.status==='maintenance'?'danger':'warning'}">${r.status}</span></td>
+                <td><span class="badge badge-${r.status==='available'?'success':'danger'}">${r.status}</span></td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -260,7 +267,7 @@
 
   function viewRoomSchedule(id) {
     const sel = document.getElementById('cal-room-select');
-    sel.innerHTML = DB.rooms.map(r => `<option value="${r.id}">${r.number}</option>`).join('');
+    sel.innerHTML = rooms.map(r => `<option value="${r.id}">${r.number}</option>`).join('');
     sel.value = id;
     switchTab('calendar');
   }
@@ -277,53 +284,80 @@
 
   function editRoom(id) {
     editingRoomId = id;
-    const r = DB.rooms.find(x => x.id === id);
+    const r = rooms.find(x => String(x.id) === String(id));
+    if (!r) { UI.showToast('Room not found.', 'error'); return; }
     document.getElementById('room-modal-title').textContent = 'Edit Room';
     document.getElementById('rf-number').value = r.number;
-    document.getElementById('rf-building').value = r.building;
+    document.getElementById('rf-building').value = r.building || '';
     document.getElementById('rf-type').value = r.type;
     document.getElementById('rf-capacity').value = r.capacity;
     document.getElementById('rf-status').value = r.status;
-    document.getElementById('rf-facilities').value = (r.facilities||[]).join(', ');
+    const facs = r.facilities ? (Array.isArray(r.facilities) ? r.facilities.join(', ') : r.facilities) : '';
+    document.getElementById('rf-facilities').value = facs;
     document.getElementById('room-error').style.display = 'none';
     UI.openModal('room-modal');
   }
 
-  function saveRoom() {
-    const number = document.getElementById('rf-number').value.trim();
+  // Save room - calls rooms.php
+  async function saveRoom() {
+    const number   = document.getElementById('rf-number').value.trim();
     const building = document.getElementById('rf-building').value.trim();
     const capacity = parseInt(document.getElementById('rf-capacity').value);
-    if (!number || !building || !capacity) { document.getElementById('room-error').style.display = 'flex'; return; }
-    const data = {
-      number, building, capacity,
-      type: document.getElementById('rf-type').value,
-      status: document.getElementById('rf-status').value,
-      facilities: document.getElementById('rf-facilities').value.split(',').map(f=>f.trim()).filter(Boolean)
-    };
-    if (editingRoomId) {
-      const idx = DB.rooms.findIndex(r => r.id === editingRoomId);
-      DB.rooms[idx] = { ...DB.rooms[idx], ...data };
-      Storage.save();
-      UI.showToast('Room updated.');
+    if (!number || !capacity) { document.getElementById('room-error').style.display = 'flex'; return; }
+
+    const formData = new FormData();
+    formData.append('action',     editingRoomId ? 'edit' : 'add');
+    formData.append('number',     number);
+    formData.append('building',   building);
+    formData.append('type',       document.getElementById('rf-type').value);
+    formData.append('capacity',   capacity);
+    formData.append('status',     document.getElementById('rf-status').value);
+    formData.append('facilities', document.getElementById('rf-facilities').value.trim());
+    if (editingRoomId) formData.append('id', editingRoomId);
+
+    const res    = await fetch(BACKEND + 'rooms.php', { method: 'POST', body: formData });
+    const result = await res.json();
+
+    if (result.success) {
+      UI.showToast(editingRoomId ? 'Room updated.' : 'Room added.');
+      UI.closeModal('room-modal');
+      loadRooms();
     } else {
-      DB.rooms.push({ id: DB.nextId('rooms'), ...data });
-      Storage.save();
-      UI.showToast('Room added.');
+      document.getElementById('room-error').textContent = result.message;
+      document.getElementById('room-error').style.display = 'flex';
     }
-    UI.closeModal('room-modal');
-    renderRooms();
   }
 
-  function deleteRoom(id) {
-    UI.confirm('Delete this room?', () => {
-      DB.rooms = DB.rooms.filter(r => r.id !== id);
-      Storage.save();
-      UI.showToast('Room deleted.', 'warning');
-      renderRooms();
+  async function deleteRoom(id) {
+    UI.confirm('Delete this room?', async () => {
+      const formData = new FormData();
+      formData.append('action', 'delete');
+      formData.append('id', id);
+      const res    = await fetch(BACKEND + 'rooms.php', { method: 'POST', body: formData });
+      const result = await res.json();
+      if (result.success) {
+        UI.showToast('Room deleted.', 'warning');
+        loadRooms();
+      } else {
+        UI.showToast(result.message, 'error');
+      }
     });
   }
 
-  renderRooms();
+  // Load rooms from PHP
+  async function loadRooms() {
+    const formData = new FormData();
+    formData.append('action', 'get_all');
+    const res    = await fetch(BACKEND + 'rooms.php', { method: 'POST', body: formData });
+    const result = await res.json();
+    if (result.success) {
+      rooms = result.data;
+      renderRooms();
+    }
+  }
+
+  let rooms = [];
+  loadRooms();
 </script>
 </body>
 </html>

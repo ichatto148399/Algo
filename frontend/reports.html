@@ -87,176 +87,131 @@
   </div>
 </div>
 
-<script src="js/data.js"></script>
-<script src="../backend/storage.js"></script>
-<script src="../backend/auth.js"></script>
+
+<script src="js/auth.js"></script>
 <script>
+  const BACKEND = '../backend/';
   Auth.requireAuth(['admin','registrar']);
   UI.renderSidebar('reports');
-  UI.renderTopbar('Reports', 'Academic year 2025–2026 | 1st Semester');
+  UI.renderTopbar('Reports', 'View system reports');
 
+  let allFaculty = [], allRooms = [], allSchedules = [], allConflicts = [];
+
+  // ── Tab switching ──
   function switchTab(tab) {
     const tabs = ['faculty','room','master','conflict'];
     document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', tabs[i] === tab));
     document.querySelectorAll('.tab-pane').forEach((p,i) => p.classList.toggle('active', `tab-${tabs[i]}` === `tab-${tab}`));
-    if (tab === 'room') renderRoomReport();
-    if (tab === 'master') renderMasterSchedule();
+    if (tab === 'faculty') renderFacultyReport();
+    if (tab === 'room')    renderRoomReport();
+    if (tab === 'master')  renderMasterSchedule();
     if (tab === 'conflict') renderConflictReport();
   }
 
-  function renderFacultyReport() {
+  // ── Faculty Loading ──
+  async function renderFacultyReport() {
     const dept = document.getElementById('rpt-dept').value;
-    const faculty = DB.users.filter(u => u.role === 'faculty' && (!dept || u.department === dept));
-
-    const rows = faculty.length
-      ? faculty.map(f => {
-          const schedules = DB.schedules.filter(s => s.facultyId === f.id);
-          const units = schedules.reduce((sum, s) => { const subj = DB.subjects.find(sub => sub.id === s.subjectId); return sum + (subj ? subj.units : 0); }, 0);
-          const max = f.maxUnits || 21;
-          const status = units > max ? 'Overload' : units === 0 ? 'No Load' : units >= max * 0.8 ? 'Full Load' : 'Partial Load';
-          const statusColor = units > max ? 'danger' : units === 0 ? 'secondary' : units >= max * 0.8 ? 'success' : 'warning';
-          return `<tr>
-            <td>${f.employeeId || '–'}</td>
+    const area = document.getElementById('faculty-report');
+    area.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+    try {
+      const res    = await fetch(BACKEND + 'reports.php?action=faculty_loading');
+      const result = await res.json();
+      if (!result.success) { area.innerHTML = '<p style="color:red">Failed to load.</p>'; return; }
+      let data = result.data;
+      if (dept) data = data.filter(f => f.department === dept);
+      area.innerHTML = data.length ? `
+        <div class="table-wrapper"><table>
+          <thead><tr><th>Faculty</th><th>Department</th><th>Total Units</th><th>Max Units</th><th>Remaining</th><th>Status</th></tr></thead>
+          <tbody>${data.map(f => `<tr>
             <td class="fw-bold">${f.name}</td>
-            <td>${f.department}</td>
-            <td>${schedules.map(s => `<span class="badge badge-primary" style="margin:1px">${s.subjectCode}</span>`).join('') || '–'}</td>
-            <td style="text-align:center;font-weight:700">${units}</td>
-            <td style="text-align:center">${max}</td>
-            <td><span class="badge badge-${statusColor}">${status}</span></td>
-          </tr>`;
-        }).join('')
-      : '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-muted)">No faculty accounts added yet.</td></tr>';
-
-    const overloaded = faculty.filter(f => {
-      const u = DB.schedules.filter(s=>s.facultyId===f.id).reduce((sum,s)=>{const sub=DB.subjects.find(x=>x.id===s.subjectId);return sum+(sub?sub.units:0);},0);
-      return u > (f.maxUnits||21);
-    }).length;
-    const noLoad = faculty.filter(f => DB.schedules.filter(s=>s.facultyId===f.id).length === 0).length;
-
-    document.getElementById('faculty-report').innerHTML = `
-      <h3 style="margin-bottom:16px;font-size:15px;font-weight:700">Faculty Loading Report — AY 2025–2026, 1st Semester</h3>
-      <div class="table-wrapper">
-        <table>
-          <thead><tr><th>Employee ID</th><th>Faculty Name</th><th>Department</th><th>Subjects</th><th>Total Units</th><th>Max Units</th><th>Load Status</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-      ${faculty.length ? `<div style="margin-top:16px;padding:12px;background:#f7f9fc;border-radius:8px;font-size:13px">
-        <strong>Summary:</strong> ${faculty.length} faculty member${faculty.length !== 1 ? 's' : ''} |
-        ${overloaded} overloaded | ${noLoad} with no load
-      </div>` : ''}`;
+            <td>${f.department || '—'}</td>
+            <td style="text-align:center">${f.total_units}</td>
+            <td style="text-align:center">${f.max_units}</td>
+            <td style="text-align:center">${f.remaining_units}</td>
+            <td><span class="badge badge-${f.status==='overloaded'?'danger':f.remaining_units==0?'warning':'success'}">${f.status}</span></td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<p style="text-align:center;padding:30px;color:var(--text-muted)">No faculty data found.</p>';
+    } catch(e) { area.innerHTML = '<p style="color:red">Error loading report.</p>'; }
   }
 
-  function renderRoomReport() {
-    const rows = DB.rooms.length
-      ? DB.rooms.map(r => {
-          const scheds = DB.schedules.filter(s => s.roomId === r.id);
-          const avgStudents = scheds.length ? Math.round(scheds.reduce((sum,s)=>sum+s.students,0)/scheds.length) : 0;
-          const pct = Math.min(Math.round((scheds.length / 10) * 100), 100);
-          const color = pct > 80 ? 'red' : pct > 50 ? 'orange' : 'green';
-          return `<tr>
+  // ── Room Utilization ──
+  async function renderRoomReport() {
+    const area = document.getElementById('room-report');
+    area.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+    try {
+      const res    = await fetch(BACKEND + 'reports.php?action=room_usage');
+      const result = await res.json();
+      if (!result.success) { area.innerHTML = '<p style="color:red">Failed to load.</p>'; return; }
+      const data = result.data;
+      area.innerHTML = data.length ? `
+        <div class="table-wrapper"><table>
+          <thead><tr><th>Room</th><th>Building</th><th>Type</th><th>Capacity</th><th>Classes Scheduled</th><th>Status</th></tr></thead>
+          <tbody>${data.map(r => `<tr>
             <td class="fw-bold">${r.number}</td>
-            <td>${r.building}</td>
+            <td>${r.building || '—'}</td>
             <td>${r.type}</td>
             <td style="text-align:center">${r.capacity}</td>
-            <td style="text-align:center">${scheds.length}</td>
-            <td style="text-align:center">${avgStudents || '–'}</td>
-            <td style="min-width:140px">
-              <div class="d-flex align-center gap-2">
-                <div class="progress-bar-wrap" style="flex:1"><div class="progress-bar ${color}" style="width:${pct}%"></div></div>
-                <span style="font-size:12px;font-weight:700;min-width:35px">${pct}%</span>
-              </div>
-            </td>
-            <td><span class="badge badge-${r.status==='available'?'success':r.status==='maintenance'?'danger':'warning'}">${r.status}</span></td>
-          </tr>`;
-        }).join('')
-      : '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-muted)">No rooms added yet.</td></tr>';
-
-    document.getElementById('room-report').innerHTML = `
-      <h3 style="margin-bottom:16px;font-size:15px;font-weight:700">Room Utilization Report — AY 2025–2026, 1st Semester</h3>
-      <div class="table-wrapper">
-        <table>
-          <thead><tr><th>Room</th><th>Building</th><th>Type</th><th>Capacity</th><th>Classes/Week</th><th>Avg Students</th><th>Utilization %</th><th>Status</th></tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>`;
+            <td style="text-align:center">${r.total_schedules}</td>
+            <td><span class="badge badge-${r.status==='available'?'success':'danger'}">${r.status}</span></td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<p style="text-align:center;padding:30px;color:var(--text-muted)">No room data found.</p>';
+    } catch(e) { area.innerHTML = '<p style="color:red">Error loading report.</p>'; }
   }
 
-  function renderMasterSchedule() {
+  // ── Master Schedule ──
+  async function renderMasterSchedule() {
     const program = document.getElementById('ms-program').value;
-    const year = document.getElementById('ms-year').value;
-    let schedules = DB.schedules;
-    if (program) schedules = schedules.filter(s => s.section.startsWith(program));
-    if (year) schedules = schedules.filter(s => { const subj = DB.subjects.find(x => x.id === s.subjectId); return subj && subj.yearLevel == year; });
-
-    const sections = [...new Set(schedules.map(s => s.section))].sort();
-    document.getElementById('master-schedule').innerHTML = `
-      <h3 style="margin-bottom:16px;font-size:15px;font-weight:700">Master Schedule${program ? ' — ' + program : ''}${year ? ', Year ' + year : ''}</h3>
-      ${sections.length ? sections.map(sec => {
-        const secScheds = schedules.filter(s => s.section === sec);
-        return `<div style="margin-bottom:20px">
-          <h4 style="font-size:13px;font-weight:700;margin-bottom:8px;color:var(--primary)">${sec}</h4>
-          <div class="table-wrapper">
-            <table>
-              <thead><tr><th>Subject Code</th><th>Title</th><th>Faculty</th><th>Room</th><th>Day</th><th>Time</th><th>Type</th><th>Units</th></tr></thead>
-              <tbody>
-                ${secScheds.map(s => {
-                  const subj = DB.subjects.find(x => x.id === s.subjectId);
-                  return `<tr>
-                    <td><span class="badge badge-primary">${s.subjectCode}</span></td>
-                    <td>${s.subjectTitle}</td>
-                    <td style="font-size:12px">${s.facultyName}</td>
-                    <td>${s.room}</td>
-                    <td>${s.day}</td>
-                    <td style="font-size:12px">${s.startTime}–${s.endTime}</td>
-                    <td><span class="badge badge-${s.type==='Lab'?'warning':'secondary'}">${s.type}</span></td>
-                    <td style="text-align:center">${subj ? subj.units : '–'}</td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-        </div>`;
-      }).join('') : '<div class="empty-state"><p>No schedules found for the selected filters.</p></div>'}`;
+    const year    = document.getElementById('ms-year').value;
+    const area    = document.getElementById('master-schedule');
+    area.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+    try {
+      const res    = await fetch(BACKEND + 'reports.php?action=master_schedule');
+      const result = await res.json();
+      if (!result.success) { area.innerHTML = '<p style="color:red">Failed to load.</p>'; return; }
+      let data = result.data;
+      if (program) data = data.filter(s => s.program === program);
+      if (year)    data = data.filter(s => String(s.year_level) === String(year));
+      area.innerHTML = data.length ? `
+        <div class="table-wrapper"><table>
+          <thead><tr><th>Subject</th><th>Section</th><th>Faculty</th><th>Room</th><th>Day</th><th>Time</th><th>Type</th></tr></thead>
+          <tbody>${data.map(s => `<tr>
+            <td><div class="fw-bold">${s.subject_code}</div><div style="font-size:11px;color:var(--text-muted)">${s.subject_title}</div></td>
+            <td>${s.section}</td>
+            <td style="font-size:12px">${s.faculty_name}</td>
+            <td><span class="badge badge-info">${s.room_number}</span></td>
+            <td>${s.day}</td>
+            <td style="font-size:12px">${s.start_time} – ${s.end_time}</td>
+            <td><span class="badge badge-${s.type==='Laboratory'?'warning':'primary'}">${s.type}</span></td>
+          </tr>`).join('')}</tbody>
+        </table></div>` : '<p style="text-align:center;padding:30px;color:var(--text-muted)">No schedules found.</p>';
+    } catch(e) { area.innerHTML = '<p style="color:red">Error loading report.</p>'; }
   }
 
-  function renderConflictReport() {
-    const conflicts = [];
-    DB.schedules.forEach((s1, i) => {
-      DB.schedules.slice(i + 1).forEach(s2 => {
-        if (s1.day !== s2.day) return;
-        const overlap = s1.startTime < s2.endTime && s1.endTime > s2.startTime;
-        if (!overlap) return;
-        if (s1.facultyId === s2.facultyId) conflicts.push({ type: 'Faculty Conflict', s1, s2, detail: `${s1.facultyName} is scheduled in two classes simultaneously` });
-        if (s1.roomId === s2.roomId) conflicts.push({ type: 'Room Conflict', s1, s2, detail: `${s1.room} is double-booked` });
-        if (s1.section === s2.section) conflicts.push({ type: 'Section Conflict', s1, s2, detail: `Section ${s1.section} has overlapping classes` });
-      });
-    });
-
-    document.getElementById('conflict-report').innerHTML = `
-      <div class="d-flex justify-between align-center mb-2">
-        <h3 style="font-size:15px;font-weight:700">Conflict Report — AY 2025–2026, 1st Semester</h3>
-        <span class="badge badge-${conflicts.length ? 'danger' : 'success'}">${conflicts.length} conflict${conflicts.length !== 1 ? 's' : ''}</span>
-      </div>
-      ${conflicts.length ? `
-        <div class="table-wrapper">
-          <table>
-            <thead><tr><th>Type</th><th>Detail</th><th>Schedule 1</th><th>Schedule 2</th><th>Day</th><th>Time Overlap</th></tr></thead>
-            <tbody>
-              ${conflicts.map(c => `<tr>
-                <td><span class="badge badge-danger">${c.type}</span></td>
-                <td style="font-size:12px">${c.detail}</td>
-                <td><span class="badge badge-primary">${c.s1.subjectCode}</span> ${c.s1.section}</td>
-                <td><span class="badge badge-primary">${c.s2.subjectCode}</span> ${c.s2.section}</td>
-                <td>${c.s1.day}</td>
-                <td style="font-size:12px">${c.s1.startTime}–${c.s1.endTime} / ${c.s2.startTime}–${c.s2.endTime}</td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>` :
-        '<div class="alert alert-success">✓ No scheduling conflicts detected. All schedules are clear.</div>'}`;
+  // ── Conflict Report ──
+  async function renderConflictReport() {
+    const area = document.getElementById('conflict-report');
+    area.innerHTML = '<p style="color:var(--text-muted)">Loading...</p>';
+    try {
+      const res    = await fetch(BACKEND + 'schedules.php?action=check_conflicts');
+      const result = await res.json();
+      if (!result.success) { area.innerHTML = '<p style="color:red">Failed to load.</p>'; return; }
+      const conflicts = result.conflicts;
+      area.innerHTML = conflicts.length
+        ? `<h3 style="margin-bottom:16px;font-size:15px;font-weight:700;color:red">⚠ ${conflicts.length} Conflict(s) Found</h3>
+          <div class="table-wrapper"><table>
+            <thead><tr><th>Type</th><th>Detail</th><th>Schedule 1</th><th>Schedule 2</th></tr></thead>
+            <tbody>${conflicts.map(c => `<tr>
+              <td><span class="badge badge-danger">${c.type}</span></td>
+              <td style="font-size:12px">${c.detail}</td>
+              <td style="font-size:12px">${c.s1.subject_code} ${c.s1.section} ${c.s1.day} ${c.s1.start_time}</td>
+              <td style="font-size:12px">${c.s2.subject_code} ${c.s2.section} ${c.s2.day} ${c.s2.start_time}</td>
+            </tr>`).join('')}</tbody>
+          </table></div>`
+        : '<div style="text-align:center;padding:40px;color:green;font-size:15px">✓ No conflicts found! All schedules are clear.</div>';
+    } catch(e) { area.innerHTML = '<p style="color:red">Error loading report.</p>'; }
   }
 
+  // Load default tab on page load
   renderFacultyReport();
 </script>
 </body>
