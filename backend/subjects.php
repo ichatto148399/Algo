@@ -160,7 +160,7 @@ if ($action === 'edit_subject') {
 
   if ($haslec) {
     $stmt = $conn->prepare("UPDATE subjects SET code=?,title=?,units=?,type=?,program_id=?,year_level=?,semester=?,lec_hours=?,lab_hours=? WHERE id=?");
-    $stmt->bind_param('ssissisiis', $code,$title,$units,$type,$program_id,$year_level,$semester,$lec,$lab,$id);
+    $stmt->bind_param('ssissiisii', $code,$title,$units,$type,$program_id,$year_level,$semester,$lec,$lab,$id);
   } else {
     $stmt = $conn->prepare("UPDATE subjects SET code=?,title=?,units=?,type=?,program_id=?,year_level=?,semester=? WHERE id=?");
     $stmt->bind_param('ssissisi', $code,$title,$units,$type,$program_id,$year_level,$semester,$id);

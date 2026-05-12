@@ -1,5 +1,17 @@
 // dashboard.js - Fetches real data from PHP backend and renders the dashboard
 
+// Local API helper — works even if auth.js API object isn't in scope yet
+async function apiCall(endpoint, params) {
+  const formData = new FormData();
+  for (const key in params) formData.append(key, params[key]);
+  try {
+    const res  = await fetch('../backend/' + endpoint, { method: 'POST', body: formData });
+    return await res.json();
+  } catch (e) {
+    return { success: false, message: 'Cannot connect to server.' };
+  }
+}
+
 Auth.requireAuth();
 UI.renderSidebar('dashboard');
 UI.renderTopbar('Dashboard', `Welcome back, ${Auth.currentUser.name}`);
@@ -37,11 +49,11 @@ async function renderAdminDashboard() {
 
   // Fetch all data from PHP backend at the same time
   const [usersRes, roomsRes, subjectsRes, schedulesRes, requestsRes] = await Promise.all([
-    API.call('users.php',           { action: 'get_all' }),
-    API.call('rooms.php',           { action: 'get_all' }),
-    API.call('subjects.php',        { action: 'get_all' }),
-    API.call('schedules.php',       { action: 'get_all' }),
-    API.call('change_requests.php', { action: 'get_all' }),
+    apiCall('users.php',           { action: 'get_all' }),
+    apiCall('rooms.php',           { action: 'get_all' }),
+    apiCall('subjects.php',        { action: 'get_subjects' }),
+    apiCall('schedules.php',       { action: 'get_all' }),
+    apiCall('change_requests.php', { action: 'get_all' }),
   ]);
 
   // Get the data arrays from each response
@@ -192,8 +204,8 @@ async function renderFacultyDashboard() {
   const user = Auth.currentUser;
 
   const [schedulesRes, requestsRes] = await Promise.all([
-    API.call('schedules.php',       { action: 'get_all' }),
-    API.call('change_requests.php', { action: 'get_all' }),
+    apiCall('schedules.php',       { action: 'get_all' }),
+    apiCall('change_requests.php', { action: 'get_all' }),
   ]);
 
   const allSchedules = schedulesRes.success ? schedulesRes.data : [];
