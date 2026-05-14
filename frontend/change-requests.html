@@ -56,7 +56,7 @@
       <div class="form-group">
         <label>Select Schedule *</label>
         <select id="req-schedule" class="form-control">
-          <option value="">-- Select your schedule --</option>
+          <option value="">Select your schedule</option>
         </select>
       </div>
       <div class="form-group">
@@ -120,7 +120,7 @@
     if (!sel) return;
     const isAdmin  = ['admin','registrar'].includes(user.role);
     const myScheds = isAdmin ? schedules : schedules.filter(s => String(s.faculty_id) === String(user.id));
-    sel.innerHTML  = '<option value="">-- Select your schedule --</option>' +
+    sel.innerHTML  = '<option value="">Select your schedule</option>' +
       myScheds.map(s => {
         const start = (s.start_time || '').substring(0, 5);
         return `<option value="${s.id}">${s.subject_code} – ${s.section} (${s.day} ${start})</option>`;

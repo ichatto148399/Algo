@@ -40,7 +40,7 @@
           <div class="card-body">
             <div class="toolbar">
               <div class="search-box">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="assign-search" placeholder="Search..." oninput="renderAssignments()">
               </div>
               <select class="filter-select" id="assign-filter-faculty" onchange="renderAssignments()">
@@ -84,13 +84,13 @@
         <div class="form-group">
           <label>Faculty Member *</label>
           <select id="af-faculty" class="form-control">
-            <option value="">-- Select Faculty --</option>
+            <option value="">Select Faculty</option>
           </select>
         </div>
         <div class="form-group">
           <label>Subject *</label>
           <select id="af-subject" class="form-control">
-            <option value="">-- Select Subject --</option>
+            <option value="">Select Subject</option>
           </select>
         </div>
       </div>
@@ -102,7 +102,7 @@
         <div class="form-group">
           <label>Room *</label>
           <select id="af-room" class="form-control">
-            <option value="">-- Select Room --</option>
+            <option value="">Select Room</option>
           </select>
         </div>
       </div>
@@ -145,6 +145,7 @@
 
 <script src="js/auth.js"></script>
 <script>
+
 
   Auth.requireAuth(['admin', 'registrar']);
   UI.renderSidebar('faculty-loading');
@@ -299,14 +300,14 @@
 
   // Open assign modal and populate dropdowns
   function openAssignModal() {
-    document.getElementById('af-faculty').innerHTML = '<option value="">-- Select Faculty --</option>' +
+    document.getElementById('af-faculty').innerHTML = '<option value="">Select Faculty</option>' +
       allFaculty.filter(f => f.status === 'active')
         .map(f => `<option value="${f.id}">${f.name} (${f.department || ''})</option>`).join('');
 
-    document.getElementById('af-subject').innerHTML = '<option value="">-- Select Subject --</option>' +
+    document.getElementById('af-subject').innerHTML = '<option value="">Select Subject</option>' +
       allSubjects.map(s => `<option value="${s.id}">${s.code} – ${s.title} (${s.units} units)</option>`).join('');
 
-    document.getElementById('af-room').innerHTML = '<option value="">-- Select Room --</option>' +
+    document.getElementById('af-room').innerHTML = '<option value="">Select Room</option>' +
       allRooms.filter(r => r.status === 'available')
         .map(r => `<option value="${r.id}">${r.number} (${r.type}, Cap: ${r.capacity})</option>`).join('');
 

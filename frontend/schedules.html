@@ -63,7 +63,7 @@
           <div class="card-body">
             <div class="toolbar">
               <div class="search-box">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 <input type="text" id="sched-search" placeholder="Search schedules..." oninput="renderList()">
               </div>
               <select class="filter-select" id="sched-day-filter" onchange="renderList()">
@@ -86,11 +86,6 @@
       <div class="tab-pane" id="tab-conflicts">
         <div class="card">
           <div class="card-body">
-            <div style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px">
-              <strong>🔬 Algorithms running on this page:</strong>
-              &nbsp;|&nbsp; <span style="color:var(--primary)">① Backtracking</span> — detects faculty, room & section conflicts
-              &nbsp;|&nbsp; <span style="color:var(--primary)">② Kahn's Algorithm</span> — orders subjects by prerequisites (topological sort)
-            </div>
             <div id="conflicts-content"></div>
           </div>
         </div>
@@ -119,15 +114,12 @@
       <h3 id="sched-modal-title">Add Schedule</h3>
       <button class="modal-close" onclick="UI.closeModal('sched-modal')">✕</button>
     </div>
-    <div style="background:#f0f4ff;border-left:3px solid var(--primary);padding:8px 12px;font-size:11px;color:var(--primary);margin:0 20px 4px">
-      🔬 <strong>Backtracking</strong> checks conflicts on save &nbsp;·&nbsp; <strong>Greedy FFD</strong> suggests faculty &nbsp;·&nbsp; <strong>Dijkstra</strong> suggests best room
-    </div>
     <div class="modal-body">
       <div class="form-row">
         <div class="form-group">
           <label>Subject *</label>
           <select id="sf-subject" class="form-control" onchange="onSubjectChange()">
-            <option value="">-- Select Subject --</option>
+            <option value="">Select Subject</option>
           </select>
         </div>
         <div class="form-group">
@@ -137,9 +129,9 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Faculty * <button type="button" class="btn btn-sm" style="font-size:10px;padding:2px 8px;margin-left:6px;background:var(--primary);color:white;border-radius:4px" onclick="suggestFaculty()" title="Greedy FFD Algorithm">⚡ Suggest (Greedy FFD)</button></label>
+          <label>Faculty *</label>
           <select id="sf-faculty" class="form-control">
-            <option value="">-- Select Faculty --</option>
+            <option value="">Select Faculty</option>
           </select>
         </div>
         <div class="form-group">
@@ -149,9 +141,9 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Room * <button type="button" class="btn btn-sm" style="font-size:10px;padding:2px 8px;margin-left:6px;background:var(--primary);color:white;border-radius:4px" onclick="suggestRoom()" title="Dijkstra on DAG Algorithm">⚡ Suggest (Dijkstra)</button></label>
+          <label>Room *</label>
           <select id="sf-room" class="form-control">
-            <option value="">-- Select Room --</option>
+            <option value="">Select Room</option>
           </select>
         </div>
         <div class="form-group">
@@ -201,7 +193,7 @@
       <div class="form-group">
         <label>Schedule *</label>
         <select id="req-schedule" class="form-control">
-          <option value="">-- Select Schedule --</option>
+          <option value="">Select Schedule</option>
         </select>
       </div>
       <div class="form-group">
@@ -431,11 +423,11 @@
   function openAddSchedule() {
     editingSchedId = null;
     document.getElementById('sched-modal-title').textContent = 'Add Schedule';
-    document.getElementById('sf-subject').innerHTML = '<option value="">-- Select Subject --</option>' +
+    document.getElementById('sf-subject').innerHTML = '<option value="">Select Subject</option>' +
       subjects.map(s => `<option value="${s.id}">${s.code} – ${s.title}</option>`).join('');
-    document.getElementById('sf-faculty').innerHTML = '<option value="">-- Select Faculty --</option>' +
+    document.getElementById('sf-faculty').innerHTML = '<option value="">Select Faculty</option>' +
       faculties.filter(f => f.status === 'active').map(f => `<option value="${f.id}">${f.name}</option>`).join('');
-    document.getElementById('sf-room').innerHTML = '<option value="">-- Select Room --</option>' +
+    document.getElementById('sf-room').innerHTML = '<option value="">Select Room</option>' +
       rooms.filter(r => r.status === 'available').map(r => `<option value="${r.id}">${r.number} (${r.type})</option>`).join('');
     document.getElementById('sf-subject-title').value = '';
     document.getElementById('sf-section').value = '';
@@ -575,7 +567,7 @@
     const source = role === 'faculty'
       ? schedules.filter(s => String(s.faculty_id) === String(Auth.currentUser.id))
       : schedules;
-    document.getElementById('req-schedule').innerHTML = '<option value="">-- Select Schedule --</option>' +
+    document.getElementById('req-schedule').innerHTML = '<option value="">Select Schedule</option>' +
       source.map(s => `<option value="${s.id}">${s.subject_code} – ${s.section} (${s.day} ${(s.start_time||'').substring(0,5)})</option>`).join('');
     document.getElementById('req-reason').value  = '';
     document.getElementById('req-details').value = '';

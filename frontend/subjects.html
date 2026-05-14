@@ -28,7 +28,7 @@
         <div class="card-body">
           <div class="toolbar">
             <div class="search-box">
-              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="search-input" placeholder="Search by code, title..." oninput="renderTable()">
             </div>
             <select class="filter-select" id="filter-dept" onchange="renderTable()">
@@ -46,7 +46,7 @@
           <div class="table-wrapper">
             <table>
               <thead>
-                <tr><th>Code</th><th>Title</th><th>Units</th><th>Lec/Lab</th><th>Department</th><th>Program</th><th>Year</th><th>Semester</th><th>Type</th><th>Actions</th></tr>
+                <tr><th>Code</th><th>Title</th><th style="text-align:center">Units</th><th style="text-align:center">Lec/Lab</th><th>Department</th><th>Program</th><th style="text-align:center">Year</th><th>Semester</th><th>Type</th><th>Actions</th></tr>
               </thead>
               <tbody id="subjects-tbody"></tbody>
             </table>
@@ -97,13 +97,13 @@
         <div class="form-group">
           <label>Department *</label>
           <select id="f-dept" class="form-control" onchange="populateProgramSelect('f-program','f-dept')">
-            <option value="">-- Select Department --</option>
+            <option value="">Select Department</option>
           </select>
         </div>
         <div class="form-group">
           <label>Program *</label>
           <select id="f-program" class="form-control">
-            <option value="">-- Select Program --</option>
+            <option value="">Select Program</option>
           </select>
         </div>
       </div>
@@ -153,7 +153,6 @@
       <!-- Departments sub-tab -->
       <div id="dtab-departments">
         <div class="d-flex gap-2 mb-2" style="margin-bottom:12px">
-          <input type="text" id="new-dept-code" class="form-control" placeholder="Code (e.g. BSIT)" style="max-width:140px">
           <input type="text" id="new-dept-name" class="form-control" placeholder="Department name">
           <button class="btn btn-primary btn-sm" onclick="addDepartment()" style="white-space:nowrap">Add</button>
         </div>
@@ -172,7 +171,7 @@
           <input type="text" id="new-prog-code" class="form-control" placeholder="Code (e.g. BSIT)" style="max-width:140px">
           <input type="text" id="new-prog-name" class="form-control" placeholder="Program name">
           <select id="new-prog-dept" class="filter-select" style="min-width:160px">
-            <option value="">-- Department --</option>
+            <option value="">Select Department</option>
           </select>
           <button class="btn btn-primary btn-sm" onclick="addProgram()" style="white-space:nowrap">Add</button>
         </div>
@@ -197,6 +196,7 @@
   Auth.requireAuth(['admin','registrar']);
   UI.renderSidebar('subjects');
   UI.renderTopbar('Subject Management', 'Manage academic subjects');
+
 
   let editingId = null;
   let departments = [], programs = [], subjects = [];
@@ -229,7 +229,7 @@
   // ---- Populate dept select in subject modal ----
   function populateDeptSelect(selId, currentVal = '') {
     const sel = document.getElementById(selId);
-    sel.innerHTML = '<option value="">-- Select Department --</option>' +
+    sel.innerHTML = '<option value="">Select Department</option>' +
       departments.map(d => `<option value="${d.code}" ${d.code===currentVal?'selected':''}>${d.code} – ${d.name}</option>`).join('');
   }
 
@@ -239,7 +239,7 @@
     const dept = departments.find(d => d.code === deptCode);
     const filteredPrograms = dept ? programs.filter(p => String(p.department_id) === String(dept.id)) : [];
     const sel = document.getElementById(progSelId);
-    sel.innerHTML = '<option value="">-- Select Program --</option>' +
+    sel.innerHTML = '<option value="">Select Program</option>' +
       filteredPrograms.map(p => `<option value="${p.code}" ${p.code===currentVal?'selected':''}>${p.code} – ${p.name}</option>`).join('');
     if (!filteredPrograms.length && deptCode) {
       sel.innerHTML += '<option disabled>No programs for this department</option>';
@@ -292,7 +292,7 @@
     document.getElementById('f-lec').value = 3;
     document.getElementById('f-lab').value = 0;
     populateDeptSelect('f-dept');
-    document.getElementById('f-program').innerHTML = '<option value="">-- Select Program --</option>';
+    document.getElementById('f-program').innerHTML = '<option value="">Select Program</option>';
     document.getElementById('form-error').style.display = 'none';
     UI.openModal('subject-modal');
   }
@@ -410,19 +410,16 @@
 
   function refreshNewProgDeptSelect() {
     const sel = document.getElementById('new-prog-dept');
-    sel.innerHTML = '<option value="">-- Department --</option>' +
+    sel.innerHTML = '<option value="">Select Department</option>' +
       departments.map(d => `<option value="${d.id}">${d.code} – ${d.name}</option>`).join('');
   }
 
   async function addDepartment() {
-    const code = document.getElementById('new-dept-code').value.trim().toUpperCase();
     const name = document.getElementById('new-dept-name').value.trim();
     document.getElementById('dept-error').style.display = 'none';
-    if (!code || !name) { document.getElementById('dept-error').style.display = 'flex'; return; }
-    if (departments.find(d => d.code === code)) {
-      document.getElementById('dept-error').textContent = 'Department code already exists.';
-      document.getElementById('dept-error').style.display = 'flex'; return;
-    }
+    if (!name) { document.getElementById('dept-error').style.display = 'flex'; return; }
+    // Auto-generate code from initials of each word
+    const code = name.split(' ').filter(w => w.length > 2).map(w => w[0]).join('').toUpperCase() || name.substring(0,4).toUpperCase();
     const formData = new FormData();
     formData.append('action', 'add_department');
     formData.append('code', code);
@@ -430,7 +427,6 @@
     const res    = await fetch(BACKEND + 'subjects.php', { method: 'POST', body: formData });
     const result = await res.json();
     if (result.success) {
-      document.getElementById('new-dept-code').value = '';
       document.getElementById('new-dept-name').value = '';
       await loadAll();
       renderDeptTable();
@@ -444,6 +440,12 @@
   }
 
   async function deleteDepartment(id) {
+    const dept = departments.find(d => d.id == id);
+    const progCount = programs.filter(p => p.department_id == id).length;
+    if (progCount > 0) {
+      UI.showToast(`Cannot delete — delete the ${progCount} program(s) under this department first.`, 'error');
+      return;
+    }
     UI.confirm('Delete this department?', async () => {
       const formData = new FormData();
       formData.append('action', 'delete_department');

@@ -151,16 +151,13 @@ const UI = {
       sidebar.innerHTML = `
         <div class="sidebar-header">
           <div class="brand">
-            <div class="brand-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-            </div>
             <div class="brand-text"><h2>UMSync</h2><span>Academic Scheduler</span></div>
           </div>
         </div>
         <div class="sidebar-user">
           <div class="user-avatar">${initials}</div>
           <div class="user-info">
-            <div class="user-name">${user.name}</div>
+            <div class="user-name">${user.role === 'admin' ? 'Admin' : user.role === 'registrar' ? 'Registrar' : user.name}</div>
             <div class="user-role">${user.role.charAt(0).toUpperCase() + user.role.slice(1)}</div>
           </div>
         </div>
@@ -186,7 +183,7 @@ const UI = {
           ${subtitle ? `<span class="breadcrumb">${subtitle}</span>` : ''}
         </div>
         <div class="topbar-right">
-          <span style="font-size:13px;color:var(--text-muted)">Welcome, ${Auth.currentUser?.name || ''}</span>
+          <span style="font-size:13px;color:var(--text-muted)">${Auth.currentUser?.name || ''}</span>
           <div class="notif-wrapper" id="notif-wrapper">
             <button class="notif-btn" onclick="UI.toggleNotifications()" title="Notifications">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>

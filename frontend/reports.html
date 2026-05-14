@@ -120,7 +120,7 @@
       if (dept) data = data.filter(f => f.department === dept);
       area.innerHTML = data.length ? `
         <div class="table-wrapper"><table>
-          <thead><tr><th>Faculty</th><th>Department</th><th>Total Units</th><th>Max Units</th><th>Remaining</th><th>Status</th></tr></thead>
+          <thead><tr><th>Faculty</th><th>Department</th><th style="text-align:center">Total Units</th><th style="text-align:center">Max Units</th><th style="text-align:center">Remaining</th><th style="text-align:center">Status</th></tr></thead>
           <tbody>${data.map(f => `<tr>
             <td class="fw-bold">${f.name}</td>
             <td>${f.department || '—'}</td>
@@ -144,7 +144,7 @@
       const data = result.data;
       area.innerHTML = data.length ? `
         <div class="table-wrapper"><table>
-          <thead><tr><th>Room</th><th>Building</th><th>Type</th><th>Capacity</th><th>Classes Scheduled</th><th>Status</th></tr></thead>
+          <thead><tr><th>Room</th><th>Building</th><th>Type</th><th style="text-align:center">Capacity</th><th style="text-align:center">Classes Scheduled</th><th style="text-align:center">Status</th></tr></thead>
           <tbody>${data.map(r => `<tr>
             <td class="fw-bold">${r.number}</td>
             <td>${r.building || '—'}</td>
